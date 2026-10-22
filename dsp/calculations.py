@@ -12,7 +12,7 @@ Incorpora fragmentos de cálculo numérico reutilizables para:
 """
 from __future__ import annotations
 
-from typing import Callable, Optional, Sequence, Tuple, Union
+from typing import Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -130,17 +130,6 @@ def calculate_sampling_grid(duration: float, fs: float) -> Tuple[np.ndarray, flo
     n_samples = max(0, int(round(duration * fs_val)))
     t_muestras = np.arange(n_samples, dtype=np.float64) / fs_val
     return t_muestras, ts
-
-
-def sample_continuous_signal(
-    signal_func: Callable[[np.ndarray], np.ndarray],
-    duration: float,
-    fs: float,
-) -> Tuple[np.ndarray, np.ndarray]:
-    """Evalúa una función continua en los instantes discretos de muestreo."""
-    t_muestras, _ = calculate_sampling_grid(duration, fs)
-    x_muestras = signal_func(t_muestras)
-    return t_muestras, x_muestras
 
 
 # ============================================================================

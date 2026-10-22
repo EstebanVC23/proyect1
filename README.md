@@ -192,7 +192,6 @@ Mira (AudioLab_DSP)/
 │   ├── calculations.py         # Biblioteca de cálculos matemáticos para señales y gráficas
 │   ├── audio_io.py             # Carga y normalización de archivos de audio (WAV/MP3)
 │   ├── models.py               # Modelo de datos AudioTrack
-│   ├── player.py               # Módulo de reproducción de audio
 │   ├── processing.py           # Pipeline DSP: muestreo, FFT, ADC mid-rise y DAC ZOH
 │   └── reporting.py            # Exportación de informes en CSV y TXT
 ├── ui/

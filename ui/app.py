@@ -10,16 +10,14 @@ from __future__ import annotations
 import os
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
-from typing import Optional
 
 import numpy as np
 
 from dsp.audio_io import load_wav, filename_title, to_float_audio
-from dsp.calculations import compute_minmax_downsample
 from dsp.models import AudioTrack
 from dsp.processing import analyze_audio, MAX_ANALYSIS_SECONDS
 from dsp.reporting import export_csv, export_text_report
-from ui.plots import PlotManager, style_axes, pack_plot
+from ui.plots import PlotManager
 
 
 GENRES = ["Clásica / barroca", "Metal", "Salsa", "Electrónica", "Música de cantina", "Reguetón"]
@@ -88,25 +86,6 @@ class AudioDSPApp:
         self._draw_full_song(self.tracks[0])
         self._update_conclusions()
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
-
-    # ------------------------------------------------------------------
-    # Retrocompatibilidad de atributos de gráficas
-    # ------------------------------------------------------------------
-    @property
-    def _overview_line(self):
-        return self.plot_manager._overview_line
-
-    @_overview_line.setter
-    def _overview_line(self, value):
-        self.plot_manager._overview_line = value
-
-    @property
-    def _overview_xlim_cid(self):
-        return self.plot_manager._overview_xlim_cid
-
-    @_overview_xlim_cid.setter
-    def _overview_xlim_cid(self, value):
-        self.plot_manager._overview_xlim_cid = value
 
     # ------------------------------------------------------------------
     # Estilo visual de la interfaz
@@ -424,22 +403,8 @@ class AudioDSPApp:
         ).pack(side="right", padx=18, pady=7)
 
     # ------------------------------------------------------------------
-    # Envolturas de retrocompatibilidad de trazado
+    # Delegación de trazado de gráficas
     # ------------------------------------------------------------------
-    def _pack_plot(self, canvas):
-        return pack_plot(canvas)
-
-    @staticmethod
-    def _style_axes(ax):
-        style_axes(ax)
-
-    @staticmethod
-    def _minmax_indices(data: np.ndarray, start: int, end: int, max_points: int = 50000) -> np.ndarray:
-        return compute_minmax_downsample(data, start, end, max_points)
-
-    def _refresh_full_wave_visible(self, axes=None):
-        self.plot_manager._on_wave_zoom_changed(axes)
-
     def _draw_empty_state(self, message="Carga un archivo WAV"):
         self.plot_manager.draw_empty_state(message)
 
