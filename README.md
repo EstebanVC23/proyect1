@@ -1,239 +1,180 @@
-# Mira (Señales DSP) — análisis de audio mediante ADC y DAC
+# Mira (Señales DSP)
 
-Aplicación de escritorio en Python para cargar, procesar y comparar fragmentos musicales WAV. Incluye una interfaz gráfica interactiva, representación temporal en alta resolución, remuestreo antialiasing, análisis espectral mediante FFT, cuantización ADC uniforme con escala física en voltios, reconstrucción DAC (retención de orden cero e interpolación), biblioteca matemática desacoplada, histograma acústico comparativo de 7 bandas y exportación de resultados.
+Aplicación de escritorio hecha en Python para cargar y analizar archivos de audio WAV. Permite ver las señales, estudiar sus frecuencias y simular procesos de conversión ADC y DAC.
 
-## 1. Qué incluye
+## 1. Funciones principales
 
-- **Biblioteca de cinco pistas precargadas**: audios por defecto para clásica/barroca (*Capricho No. 24*), electrónica (*Fade* - Alan Walker), salsa (*Gotas de Lluvia*), música de cantina (*Repítela*) y reguetón (*Diva Virtual*), cargados automáticamente desde `data/audio/` al iniciar la app.
-- **Carga y reemplazo de archivos WAV**: permite seleccionar audios propios para cualquiera de los cinco espacios.
-- **Ficha musical editable**: metadatos de título, compositor/intérprete, año y fuente/referencia.
-- **Caracterización física del archivo**: frecuencia de muestreo original ($f_s$), número de canales, duración total y profundidad de bits.
-- **Conversión a mono**: estandarización de señales multicanal mediante promedio coherente para análisis comparativo.
-- **Intervalo temporal configurable**: rango de análisis acotado (por defecto de 0 a 6 segundos, ampliable hasta 10 s) con visualización de la ventana sombreada sobre la canción completa.
-- **Frecuencia de procesamiento y doble límite de Nyquist**: remuestreo polifásico antialiasing (`resample_poly`), con graficación simultánea de la frecuencia de Nyquist de procesamiento y la frecuencia de Nyquist del archivo original en el espectro FFT.
-- **Cuantización ADC en escala física de tensión**: rango simétrico configurable (por defecto $\pm 5.0\text{ V}$), con actualización instantánea al cambiar la resolución en bits ($4$, $8$, $12$ o $16$ bits), cálculo del paso cuántico $\Delta V$ en milivoltios y relación señal a ruido de cuantización (SNR).
-- **Reconstrucción DAC (ZOH)**: simulación por retención de orden cero y cálculo del error cuadrático medio (RMSE) y error absoluto medio (MAE).
-- **Histograma comparativo de 7 bandas acústicas**: distribución porcentual de energía espectral (subgraves, graves, medios-bajos, medios, medios-altos, agudos y muy agudos) para contrastar todos los géneros.
-- **Evaluación neuro-acústica especializada para TDAH**: análisis fundamentado en el *Modelo de Activación Cerebral Moderada (MBA)* y la *Teoría de Estimulación Óptima*, con ranking justificado por propiedades de la señal.
-- **Exportación de resultados**: generación de reportes tabulares en formato CSV e informes técnicos detallados en TXT.
-- **Biblioteca matemática modular (`dsp.calculations`)**: funciones numéricas desacopladas y reutilizables para señales continuas, muestreo, aliasing, FFT y decimación.
-- **Batería de 26 pruebas unitarias automáticas**: validación de fórmulas, unidades y casos borde con el módulo nativo `unittest`.
+- Incluye cinco canciones de ejemplo de distintos géneros musicales.
+- Permite cargar archivos WAV propios.
+- Muestra información del audio: frecuencia de muestreo, canales, duración y bits.
+- Permite elegir el fragmento de audio que se desea analizar.
+- Convierte audio estéreo a mono para facilitar la comparación.
+- Permite cambiar la frecuencia de procesamiento y la resolución del ADC.
+- Muestra la señal original, las muestras, la cuantización y la reconstrucción DAC.
+- Presenta el espectro de frecuencias mediante FFT y señala la frecuencia dominante.
+- Compara las características espectrales de las canciones.
+- Muestra la distribución de energía en siete bandas de frecuencia.
+- Permite exportar resultados en archivos CSV y TXT.
+- Incluye pruebas automáticas para revisar los cálculos principales.
 
 ## 2. Requisitos
 
-- **Python 3.10 o superior** (compatible con NumPy 1.x y NumPy 2.x).
-- **Sistema operativo**: Windows, macOS o Linux con soporte gráfico para Tkinter.
-- **Dependencias principales**:
-  - `numpy>=1.24`
-  - `scipy>=1.10`
-  - `matplotlib>=3.7`
-  - `soundfile>=0.12.0`
-- **Dependencia opcional**:
-  - `sounddevice>=0.4` (requerida únicamente si se desea reproducir el audio por los altavoces desde la interfaz).
+- Python 3.10 o superior.
+- Windows, macOS o Linux.
+- Las siguientes bibliotecas:
+  - `numpy`
+  - `scipy`
+  - `matplotlib`
+  - `soundfile`
+- `sounddevice` es opcional y se necesita para reproducir audio desde la aplicación.
 
 ## 3. Instalación y ejecución
 
-### Configuración en Windows (PowerShell)
-
-Abre una terminal PowerShell en la raíz del proyecto y ejecuta:
+En Windows, abre PowerShell en la carpeta del proyecto y ejecuta:
 
 ```powershell
-# 1. Crear el entorno virtual
+# Crear un entorno virtual
 python -m venv .venv
 
-# 2. Activar el entorno virtual
+# Activarlo
 .\.venv\Scripts\Activate.ps1
 
-# 3. Actualizar pip e instalar dependencias
+# Instalar las dependencias
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 
-# 4. Iniciar la aplicación
+# Iniciar la aplicación
 python main.py
 ```
 
-Si la política de ejecución de scripts de Windows restringe la activación de entornos virtuales, puedes ejecutar directamente:
+Si no puedes activar el entorno virtual, ejecuta la aplicación directamente:
 
 ```powershell
 .\.venv\Scripts\python.exe main.py
 ```
 
-## 4. Uso básico de la aplicación
+## 4. Uso básico
 
-1. **Biblioteca y pistas**: Al iniciar, las cinco canciones de prueba se cargan automáticamente. Puedes hacer clic en cualquier fila de la tabla para seleccionarla y editar su ficha musical.
-2. **Reemplazo de audio**: Pulsa **Cargar / reemplazar WAV** para cargar un archivo local diferente en la pista activa.
-3. **Parámetros de procesamiento**:
-   - Cambia la **Resolución ADC (bits)** mediante el menú desplegable ($4$, $8$, $12$ o $16$ bits); la aplicación recalcula y actualiza las gráficas al instante.
-   - Ajusta la **Frecuencia de procesamiento (Hz)** o el rango de tensión ($\pm 5\text{ V}$) y presiona Enter o pulsa **Aplicar y recalcular**.
-4. **Intervalo temporal**: Escribe el segundo de **Inicio** y **Fin** (por ejemplo, `0` y `6`) y presiona Enter para acotar el análisis.
-5. **Navegación por pestañas**:
-   - **Señal y ADC-DAC**: Cuatro cuadrantes que muestran la señal original, las muestras remuestreadas, la escalera de cuantización en voltios con sus niveles y la reconstrucción DAC por ZOH.
-   - **Canción completa**: Forma de onda íntegra con zoom inteligente por cubetas min-max y sombreado del intervalo seleccionado.
-   - **Espectro FFT**: Espectro unilateral de amplitud con detección del pico dominante y líneas guía para Nyquist.
-   - **Comparación de géneros**: Superposición espectral normalizada en dB respecto al pico y tabla comparativa de RMSE.
-   - **Conclusiones**: Histograma de energía por bandas acústicas y reporte neuro-acústico sobre concentración y TDAH con barra de desplazamiento.
-6. **Exportación**: Pulsa **Exportar CSV** o **Guardar informe TXT** para almacenar las métricas generadas.
+1. **Seleccionar una canción:** al abrir el programa aparecen las cinco pistas de ejemplo.
+2. **Cargar otro archivo:** usa el botón **Cargar / reemplazar WAV**.
+3. **Editar la información:** puedes cambiar el título, el intérprete, el año y la referencia.
+4. **Ajustar los parámetros:** selecciona los bits del ADC y modifica la frecuencia de procesamiento o el rango de voltaje.
+5. **Elegir el fragmento:** indica el segundo de inicio y de fin.
+6. **Revisar las pestañas:**
+   - **Señal y ADC-DAC:** muestra la señal y los procesos de conversión.
+   - **Canción completa:** muestra la forma de onda del audio.
+   - **Espectro FFT:** muestra las frecuencias presentes y la frecuencia dominante.
+   - **Comparación de géneros:** permite comparar los espectros de las canciones.
+   - **Conclusiones:** muestra la energía por bandas y el análisis incluido en el proyecto.
+7. **Guardar los resultados:** usa los botones de exportación CSV o TXT.
 
-## 5. Fundamentos y cálculos matemáticos
+## 5. Conceptos principales
 
-El núcleo científico y computacional reside en `dsp/calculations.py` y `dsp/processing.py`:
+### Muestreo y frecuencia de Nyquist
 
-### 5.1 Generación de señales continuas simuladas
-- Suma de componentes sinusoidales:
-  \[
-  x_c(t) = \sum_{i} A_i \sin(2\pi f_i t)
-  \]
-- Pulso rectangular simétrico de ancho $T$:
-  \[
-  x(t) = \begin{cases} A, & |t| \le \frac{T}{2} \\ 0, & |t| > \frac{T}{2} \end{cases}
-  \]
+El muestreo toma valores de una señal en intervalos de tiempo. Para representar correctamente una frecuencia, la frecuencia de muestreo debe ser, como mínimo, el doble de la frecuencia más alta que se desea analizar:
 
-### 5.2 Muestreo y criterio de Nyquist-Shannon
-Para evitar aliasing, la frecuencia de muestreo $f_s$ debe satisfacer la tasa mínima:
 \[
-f_{s,\text{nyquist}} = 2 f_{\max}
-\]
-Los instantes discretos se evalúan como $t_n = n / f_s$ con período $T_s = 1 / f_s$. El remuestreo polifásico aplica un filtro antialiasing FIR simétrico de fase lineal mediante `scipy.signal.resample_poly`.
-
-### 5.3 Frecuencia aparente por submuestreo (Aliasing)
-Cuando $f_{\text{signal}} > f_s / 2$, la componente espectral se pliega en la banda base $[0, f_s / 2]$. La formulación modular general empleada es:
-\[
-f_{\text{alias}} = \left| \left(|f_{\text{signal}}| + \frac{f_s}{2}\right) \bmod f_s - \frac{f_s}{2} \right|
-\]
-Esta ecuación es exacta para armónicos de cualquier orden y maneja frecuencias positivas y negativas.
-
-### 5.4 Transformada de Fourier por integración directa
-Aproximación numérica de la integral continua de Fourier:
-\[
-X(f) = \int_{-\infty}^{\infty} x(t) e^{-j 2\pi ft} \, dt
-\]
-Se resuelve mediante la regla trapezoidal (`np.trapezoid` / `np.trapz`). Para un pulso rectangular de ancho $T$, se compara con la solución analítica exacta:
-\[
-X_{\text{teorica}}(f) = T \cdot \operatorname{sinc}(f T) = T \frac{\sin(\pi f T)}{\pi f T}
+f_s \geq 2 f_{\max}
 \]
 
-### 5.5 Transformada Rápida de Fourier (FFT) y espectro unilateral
-Calcula la magnitud unilateral normalizada en escala física:
+Si no se cumple esta condición, puede aparecer **aliasing**, que hace que una frecuencia se represente como otra distinta.
+
+### Transformada de Fourier y FFT
+
+La transformada de Fourier permite analizar las frecuencias que componen una señal. El programa utiliza la FFT para calcular y mostrar el espectro del audio.
+
+La **frecuencia dominante** es la frecuencia que presenta el mayor pico en el espectro analizado. No necesariamente corresponde a la nota principal percibida ni al tono de toda la canción.
+
+### ADC y cuantización
+
+Un ADC convierte una señal analógica en valores digitales. En el programa se simula una cuantización uniforme dentro de un rango de voltaje configurable.
+
+La cantidad de niveles depende de los bits:
+
 \[
-|X[k]| = \frac{2}{N} \left| \sum_{n=0}^{N-1} x[n] e^{-j 2\pi kn / N} \right|
+N_{\text{niveles}} = 2^B
 \]
-Las componentes de continua ($k=0$) y de Nyquist ($k=N/2$ para $N$ par) se multiplican por $0.5$ (factor neto $1/N$) para preservar la conservación estricta de energía.
 
-### 5.6 Cuantización uniforme mid-rise y conversión a voltios
-Para una resolución de $B$ bits y rango simétrico $[V_{\min}, V_{\max}]$:
+Por ejemplo, 8 bits representan 256 niveles y 16 bits representan 65.536 niveles. Con más bits, los niveles son más cercanos entre sí y el error de cuantización puede disminuir.
+
+El tamaño de cada paso de voltaje se calcula así:
+
 \[
-N_{\text{niveles}} = 2^B, \qquad \Delta V = \frac{V_{\max} - V_{\min}}{2^B}
+\Delta V = \frac{V_{\max}-V_{\min}}{2^B}
 \]
-El cuantizador mid-rise mapea la señal normalizada $x \in [-1, 1]$ a voltios y calcula los códigos enteros:
-\[
-V_{\text{in}} = V_{\min} + \left(\frac{x + 1}{2}\right)(V_{\max} - V_{\min})
-\]
-\[
-\text{código} = \operatorname{clip}\left(\left\lfloor \frac{V_{\text{in}} - V_{\min}}{\Delta V} \right\rfloor, 0, 2^B - 1\right)
-\]
-\[
-V_{\text{cuant}} = V_{\min} + (\text{código} + 0.5) \Delta V
-\]
-La relación señal a ruido teórica de cuantización se evalúa como:
-\[
-\text{SNR} = 20 \log_{10}\left(\frac{\text{RMS}_{\text{señal}}}{\text{RMS}_{\text{error}}}\right) \quad [\text{dB}]
-\]
-Cuando la señal está en silencio absoluto ($\text{RMS}_{\text{señal}} = 0$) con error no nulo, la métrica reporta correctamente $-\infty\text{ dB}$, y $+\infty\text{ dB}$ si el error es nulo.
 
-### 5.7 Reconstrucción DAC y errores
-- **Retención de orden cero (ZOH)**: asigna a cada instante continuo el valor de la muestra previa: $x_{\text{ZOH}}(t) = x_s[\lfloor t \cdot f_s \rfloor]$.
-- **Métricas de error**:
-  \[
-  \text{RMSE} = \sqrt{\frac{1}{M}\sum_{m=1}^M (x[m] - x_{\text{ZOH}}[m])^2}, \qquad \text{MAE} = \frac{1}{M}\sum_{m=1}^M |x[m] - x_{\text{ZOH}}[m]|
-  \]
+### DAC y reconstrucción
 
-### 5.8 Decimación de picos min-max para visualización
-Para trazar formas de onda extensas sin aliasing visual ni degradación del rendimiento gráfico, `compute_minmax_downsample` divide el segmento visible en cubetas y conserva los índices de picos mínimos y máximos locales, garantizando que los transitorios no se pierdan al hacer zoom o pan.
+Un DAC convierte valores digitales en una señal reconstruida. La aplicación simula la retención de orden cero (ZOH), que mantiene cada muestra hasta que llega la siguiente.
 
-## 6. Música, concentración y TDAH
+También calcula dos medidas de error entre la señal original y la reconstruida:
 
-La pestaña de conclusiones integra un análisis neuro-acústico fundamentado en el *Modelo de Activación Cerebral Moderada* (MBA; Sikström & Söderlund, 2007) y la *Teoría de la Estimulación Óptima* (Zentall, 1975). En personas con Trastorno por Déficit de Atención e Hiperactividad (TDAH), la corteza prefrontal presenta un tono dopaminérgico basal disminuido, requiriendo estimulación sensorial continua y estructurada para prevenir la dispersión cognitiva.
+- **RMSE:** mide el error cuadrático medio y da más peso a los errores grandes.
+- **MAE:** calcula el promedio de los errores absolutos.
 
-A partir del histograma de 7 bandas acústicas y el análisis de armónicos:
+### Bandas de frecuencia
 
-1. **🥇 1er Lugar: Música Clásica / Barroca (*Capricho No. 24* - N. Paganini)**:
-   - **Cero interferencia fonológica**: La ausencia total de letra previene la sobrecarga del bucle fonológico de la memoria de trabajo (áreas de Broca y Wernicke).
-   - **Distribución espectral balanceada**: Concentra su energía en frecuencias medias ($500\text{–}2000\text{ Hz}$) y medias-altas ($2\text{k}\text{–}4\text{k}\text{ Hz}$), sin saturación de subgraves ni percusiones bruscas.
-   - **Estructura métrica matemática**: Favorece la sincronización de ondas cerebrales Alfa ($8\text{–}12\text{ Hz}$), asociadas con la vigilia tranquila (*relaxed alertness*) y el estudio conceptual profundo.
+El programa divide el espectro en siete bandas para comparar cómo se distribuye la energía de las canciones, desde los subgraves hasta los muy agudos.
 
-2. **🥈 2º Lugar: Electrónica Instrumental (*Fade* - Alan Walker)**:
-   - **Ancla rítmica y dopaminérgica**: Base continua y enérgica en graves ($60\text{–}250\text{ Hz}$) y subgraves ($<60\text{ Hz}$) que proporciona un estímulo propioceptivo constante.
-   - **Resonancia estocástica**: La textura sostenida de sintetizadores actúa como una envolvente estructurada (análoga al ruido marrón o rosa), enmascarando distractores súbitos del entorno.
-   - **Pulso isocrónico estable a 90 BPM**: Facilita el estado de flujo e hiperfoco en tareas de programación, diseño y trabajo operativo.
+## 6. Música y concentración
 
-3. **❌ Géneros no recomendados para la concentración**:
-   - **Salsa (*Gotas de Lluvia*)**: Polirritmia compleja, transitorios agudos en metales y síncopas que interrumpen la atención ejecutiva.
-   - **Reguetón (*Diva Virtual*)**: Patrón rítmico percusivo agresivo (*Dem Bow*) con vacíos dinámicos y lírica que satura la red de saliencia auditiva.
-   - **Música de cantina (*Repítela*)**: Contenido verbal altamente dramático y fluctuaciones dinámicas que desvían los recursos cognitivos.
+La pestaña **Conclusiones** incluye una comparación de las canciones y un análisis relacionado con la concentración y el TDAH. Este resultado debe interpretarse como una orientación basada en las características de audio utilizadas por el programa, no como una evaluación clínica ni como una recomendación médica.
 
-## 7. Pruebas automáticas
+## 7. Ejecutar las pruebas
 
-El proyecto incluye 26 pruebas unitarias que cubren todas las rutinas matemáticas, casos de borde y transformaciones DSP.
-
-Para ejecutar la batería completa con el corredor nativo de Python:
+Para ejecutar las pruebas automáticas:
 
 ```powershell
 python -m unittest discover -v tests
 ```
 
-O con `pytest` si está instalado en tu entorno:
+Si tienes `pytest` instalado, también puedes usar:
 
 ```powershell
 python -m pytest -v
 ```
 
-Las pruebas verifican:
-- Generación de señales multitonales, dos tonos y pulso rectangular.
-- Tasa de Nyquist y vector temporal discreto.
-- Casos de borde en cálculo de aliasing (frecuencias cero, múltiplos exactos de $f_s$, frecuencias negativas y $f_s$ inválida).
-- Transformada de Fourier numérica frente a la solución analítica $\operatorname{sinc}$.
-- Espectro unilateral normalizado por FFT con señales senoidales y arrays vacíos.
-- Cuantización ADC/DAC con arrays vacíos, acotamiento de error y pasos cuánticos para $4, 8, 12, 16$ bits.
-- Cálculo de SNR ante silencio absoluto ($-\infty\text{ dB}$) y cero error ($+\infty\text{ dB}$).
-- Interpolación lineal continua y decimación de envolvente min-max.
-- Espectro en dB relativos ante magnitudes nulas y validación de frecuencias máximas.
-- Remuestreo polifásico, retención ZOH con tiempos negativos y flujo integral de análisis de audio.
-- Conversión y normalización de muestras PCM (`int16`, `uint8`, flotantes y arrays vacíos).
+Las pruebas revisan los cálculos de señales, muestreo, aliasing, Fourier, FFT, cuantización, reconstrucción y procesamiento de audio.
 
 ## 8. Estructura del proyecto
 
 ```text
 proyect1/
-├── main.py                     # Punto de entrada de la aplicación
-├── requirements.txt            # Dependencias del entorno de ejecución
-├── requirements-dev.txt        # Dependencias de desarrollo y pruebas
-├── README.md                   # Documentación técnica completa
+├── main.py
+├── requirements.txt
+├── requirements-dev.txt
+├── README.md
 ├── dsp/
-│   ├── __init__.py             # Exportación pública del paquete dsp
-│   ├── audio_io.py             # Carga y normalización de archivos de audio (WAV/MP3)
-│   ├── calculations.py         # Cálculos matemáticos puros para señales, muestreo y FFT
-│   ├── models.py               # Modelo de datos AudioTrack
-│   ├── processing.py           # Pipeline DSP: remuestreo, espectro, ADC y DAC
-│   └── reporting.py            # Generación de informes CSV y TXT
+│   ├── audio_io.py
+│   ├── calculations.py
+│   ├── models.py
+│   ├── processing.py
+│   └── reporting.py
 ├── ui/
-│   ├── __init__.py             # Exportación pública del paquete ui
-│   ├── app.py                  # Controlador y ventana principal Tkinter
-│   └── plots.py                # Gestor de figuras Matplotlib (PlotManager)
+│   ├── app.py
+│   └── plots.py
 ├── data/
-│   └── audio/                  # Canciones de prueba de los cinco géneros
-│       ├── capricho_24.wav         # Clásica / Barroca
-│       ├── Alan-Walker-Faded.wav   # Electrónica
-│       ├── gotas_de_lluvia.wav     # Salsa
-│       ├── repitela.wav            # Música de cantina
-│       └── diva_virtual.wav        # Reguetón
+│   └── audio/
+│       ├── capricho_24.wav
+│       ├── Alan-Walker-Faded.wav
+│       ├── gotas_de_lluvia.wav
+│       ├── repitela.wav
+│       └── diva_virtual.wav
 └── tests/
-    ├── test_calculations.py    # Pruebas de cálculos matemáticos puros
-    └── test_processing.py      # Pruebas de procesamiento de audio, ADC y DAC
+    ├── test_calculations.py
+    └── test_processing.py
 ```
 
-## 9. Limitaciones conocidas
+- `main.py`: inicia la aplicación.
+- `dsp/`: contiene los cálculos y el procesamiento de audio.
+- `ui/`: contiene la interfaz gráfica y las gráficas.
+- `data/audio/`: guarda las canciones de ejemplo.
+- `tests/`: contiene las pruebas automáticas.
 
-- Se admiten archivos WAV con codificación PCM estándar y punto flotante compatibles con `soundfile` y `wave`.
-- La conversión de estéreo a mono se efectúa mediante promedio simple de canales, una decisión práctica orientada a la comparación espectral.
-- La simulación ADC asume cuantización uniforme lineal mid-rise; no modela no-linealidades físicas de conversores de hardware real (DNL/INL).
-- La salida de audio analógica se aproxima por retención de orden cero (ZOH), que representa el escalonamiento de un conversor DAC sin filtro de reconstrucción analógico posterior.
+## 9. Limitaciones
+
+- El análisis está pensado para archivos WAV compatibles con las bibliotecas utilizadas.
+- El audio estéreo se convierte a mono mediante el promedio de sus canales.
+- El ADC y el DAC son simulaciones por software, no modelos completos de hardware real.
+- La reconstrucción DAC usa retención de orden cero y no incluye un filtro analógico de reconstrucción.
