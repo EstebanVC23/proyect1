@@ -57,7 +57,7 @@ def quantize_adc(signal: np.ndarray, bits: int, vmin: float, vmax: float) -> Dic
     """Cuantización uniforme mid-rise. La señal de audio normalizada [-1,1] se asigna al rango V.
     
     Nota de diseño / comparación:
-    - Esta función implementa el cuantizador uniforme mid-rise especificado en la práctica de AudioLab DSP,
+    - Esta función implementa el cuantizador uniforme mid-rise especificado en la práctica de Señales DSP,
       donde los niveles reconstruidos se sitúan en los centros de los intervalos ((codes + 0.5) * delta_v).
     - Para la formulación alternativa directa basada en redondeo a extremos (Fragmento 6), véase
       `dsp.calculations.quantize_adc_dac`.

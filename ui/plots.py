@@ -1,4 +1,4 @@
-"""Gestión y renderizado de gráficas Matplotlib para Mira / AudioLab DSP.
+"""Gestión y renderizado de gráficas Matplotlib para Mira / Señales DSP.
 
 Desacopla la lógica de visualización y trazado de ui/app.py.
 Todos los cálculos que alimentan las figuras se obtienen directamente

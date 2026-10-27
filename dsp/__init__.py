@@ -1,4 +1,4 @@
-"""Paquete de análisis de audio DSP/ADC/DAC para Mira / AudioLab DSP."""
+"""Paquete de análisis de audio DSP/ADC/DAC para Mira / Señales DSP."""
 
 from .models import AudioTrack
 from .audio_io import load_audio, load_wav, filename_title, to_float_audio

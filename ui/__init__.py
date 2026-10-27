@@ -1,4 +1,4 @@
-"""Interfaz gráfica de la aplicación Mira / AudioLab DSP."""
+"""Interfaz gráfica de la aplicación Mira / Señales DSP."""
 
 from .app import AudioDSPApp
 from .plots import PlotManager, style_axes, pack_plot

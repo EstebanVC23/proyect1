@@ -1,4 +1,4 @@
-# Mira (AudioLab DSP) — análisis de audio mediante ADC y DAC
+# Mira (Señales DSP) — análisis de audio mediante ADC y DAC
 
 Aplicación de escritorio en Python para cargar, procesar y comparar fragmentos musicales WAV. Incluye una interfaz gráfica interactiva, representación temporal en alta resolución, remuestreo antialiasing, análisis espectral mediante FFT, cuantización ADC uniforme con escala física en voltios, reconstrucción DAC (retención de orden cero e interpolación), biblioteca matemática desacoplada, histograma acústico comparativo de 7 bandas y exportación de resultados.
 

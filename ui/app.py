@@ -1,4 +1,4 @@
-"""Interfaz Tkinter para la aplicación Mira / AudioLab DSP.
+"""Interfaz Tkinter para la aplicación Señales DSP.
 
 Controlador principal de la interfaz de usuario.
 Refactorizado para mantener ui/app.py liviano y legible:
@@ -51,11 +51,11 @@ INFO_BG = "#f1f5fb"
 
 
 class AudioDSPApp:
-    """Controlador y ventana principal de la aplicación Mira / AudioLab DSP."""
+    """Controlador y ventana principal de la aplicación Señales DSP."""
 
     def __init__(self, root: tk.Tk):
         self.root = root
-        self.root.title("Mira — AudioLab DSP | ADC · DAC · FFT")
+        self.root.title("Señales DSP | ADC · DAC · FFT")
         self.root.geometry("1450x900")
         self.root.minsize(1120, 720)
         self.root.configure(bg=BG)
@@ -201,7 +201,7 @@ class AudioDSPApp:
 
         badge = tk.Label(inner, text=" ∿ ", bg=PRIMARY, fg="#ffffff", font=("Segoe UI", 16, "bold"))
         badge.pack(side="left", padx=(0, 12))
-        tk.Label(inner, text="Mira — AudioLab DSP", bg=NAVY, fg="#ffffff", font=("Segoe UI", 20, "bold")).pack(side="left")
+        tk.Label(inner, text="Señales DPS", bg=NAVY, fg="#ffffff", font=("Segoe UI", 20, "bold")).pack(side="left")
         tk.Label(
             inner, text="Análisis de audio · muestreo · ADC / DAC · FFT",
             bg=NAVY, fg="#9fb3cf", font=("Segoe UI", 10)
