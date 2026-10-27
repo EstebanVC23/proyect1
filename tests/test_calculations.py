@@ -153,6 +153,79 @@ def test_compute_relative_db_spectrum():
     assert db[2] < db[0]
 
 
+
+def test_generate_twotone_signal_validaciones():
+    """Valida el manejo de casos borde en la generación de dos tonos."""
+    with unittest.TestCase().assertRaises(ValueError):
+        generate_twotone_signal(5.0, 15.0, duration=0.0)
+    with unittest.TestCase().assertRaises(ValueError):
+        generate_twotone_signal(5.0, 15.0, duration=1.0, n_points=0)
+
+
+def test_calculate_sampling_grid_casos_borde():
+    """Valida el cálculo de cuadrícula de muestreo en límites extremos."""
+    with unittest.TestCase().assertRaises(ValueError):
+        calculate_sampling_grid(duration=-1.0, fs=100.0)
+    with unittest.TestCase().assertRaises(ValueError):
+        calculate_sampling_grid(duration=1.0, fs=0.0)
+    # Duración cero debe generar un vector vacío sin error
+    t, ts = calculate_sampling_grid(duration=0.0, fs=100.0)
+    assert len(t) == 0
+    assert np.isclose(ts, 0.01)
+
+
+def test_calculate_apparent_frequency_casos_borde():
+    """Valida el aliasing en frecuencias cero, negativas y múltiplos exactos."""
+    fs = 100.0
+    # Frecuencia cero no produce alias (0 Hz)
+    assert calculate_apparent_frequency(0.0, fs) == 0.0
+    # Frecuencia negativa se pliega al mismo valor positivo
+    assert calculate_apparent_frequency(-30.0, fs) == 30.0
+    # Múltiplo exacto de la frecuencia de muestreo se pliega a DC (0 Hz)
+    assert calculate_apparent_frequency(100.0, fs) == 0.0
+    assert calculate_apparent_frequency(200.0, fs) == 0.0
+    # Exactamente en Nyquist (fs / 2 = 50 Hz)
+    assert calculate_apparent_frequency(50.0, fs) == 50.0
+    # Tasa de muestreo no positiva debe generar excepción
+    with unittest.TestCase().assertRaises(ValueError):
+        calculate_apparent_frequency(50.0, 0.0)
+
+
+def test_quantize_adc_dac_array_vacio():
+    """Valida que la cuantización ADC/DAC maneje arrays vacíos sin excepción."""
+    codes, recon, err, q_step = quantize_adc_dac(np.array([]), bits=8, v_min=-5.0, v_max=5.0)
+    assert len(codes) == 0
+    assert len(recon) == 0
+    assert len(err) == 0
+    assert np.isclose(q_step, 10.0 / 256)
+
+
+def test_compute_fft_spectrum_array_vacio_y_fs_invalida():
+    """Valida FFT con señales vacías y frecuencias inválidas."""
+    freqs, mag = compute_fft_spectrum(np.array([]), fs=1000.0)
+    assert len(freqs) == 0
+    assert len(mag) == 0
+    with unittest.TestCase().assertRaises(ValueError):
+        compute_fft_spectrum(np.array([1.0, 2.0]), fs=0.0)
+
+
+def test_compute_relative_db_spectrum_silencio_y_limites():
+    """Valida espectro en dB con silencio absoluto y frecuencia máxima negativa."""
+    f = np.array([10.0, 20.0, 30.0])
+    mag_silencio = np.array([0.0, 0.0, 0.0])
+    f_out, db_out = compute_relative_db_spectrum(f, mag_silencio, floor_db=-120.0)
+    assert np.all(db_out == -120.0)
+
+    # Frecuencia máxima negativa debe generar excepción
+    with unittest.TestCase().assertRaises(ValueError):
+        compute_relative_db_spectrum(f, f, max_frequency=-10.0)
+
+    # Arrays vacíos
+    f_empty, db_empty = compute_relative_db_spectrum(np.array([]), np.array([]))
+    assert len(f_empty) == 0
+    assert len(db_empty) == 0
+
+
 class TestCalculations(unittest.TestCase):
     def test_multitone(self):
         test_generate_multitone_signal()
@@ -160,11 +233,20 @@ class TestCalculations(unittest.TestCase):
     def test_twotone_and_pulse(self):
         test_generate_twotone_and_rectangular_pulse()
 
+    def test_twotone_validaciones(self):
+        test_generate_twotone_signal_validaciones()
+
     def test_nyquist_grid(self):
         test_calculate_nyquist_and_sampling_grid()
 
+    def test_grid_casos_borde(self):
+        test_calculate_sampling_grid_casos_borde()
+
     def test_aliasing(self):
         test_calculate_apparent_frequency_aliasing()
+
+    def test_aliasing_casos_borde(self):
+        test_calculate_apparent_frequency_casos_borde()
 
     def test_fourier_direct(self):
         test_transformada_fourier_direct_vs_theoretical()
@@ -172,8 +254,14 @@ class TestCalculations(unittest.TestCase):
     def test_fft(self):
         test_compute_fft_spectrum()
 
+    def test_fft_array_vacio(self):
+        test_compute_fft_spectrum_array_vacio_y_fs_invalida()
+
     def test_quantize(self):
         test_quantize_adc_dac()
+
+    def test_quantize_array_vacio(self):
+        test_quantize_adc_dac_array_vacio()
 
     def test_interpolation(self):
         test_interpolate_signal()
@@ -183,6 +271,9 @@ class TestCalculations(unittest.TestCase):
 
     def test_db_spectrum(self):
         test_compute_relative_db_spectrum()
+
+    def test_db_spectrum_silencio(self):
+        test_compute_relative_db_spectrum_silencio_y_limites()
 
 
 if __name__ == "__main__":

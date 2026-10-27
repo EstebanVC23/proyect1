@@ -61,7 +61,7 @@ def export_text_report(path: str, tracks: List[AudioTrack], analyses: Dict[int, 
         f"Paso de cuantización uniforme: {(vmax-vmin)/(2**bits):.8g} V",
         "Convención: cuantizador uniforme mid-rise; ΔV=(Vmax−Vmin)/2^B.",
         "Reconstrucción DAC de referencia: retención de orden cero (ZOH).",
-        "Se analiza como máximo el primer fragmento de 10 segundos de cada pista.",
+        "Intervalo de análisis configurable según el rango seleccionado en la aplicación.",
         "",
     ]
     loaded = [track for track in tracks if track.loaded]

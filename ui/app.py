@@ -20,7 +20,7 @@ from dsp.audio_io import load_wav, filename_title, to_float_audio
 from dsp.models import AudioTrack
 from dsp.processing import analyze_audio, MAX_ANALYSIS_SECONDS
 from dsp.reporting import export_csv, export_text_report
-from ui.plots import PlotManager, style_axes, CARD, BORDER, MUTED, C_BLUE, C_ORANGE, C_GREEN, C_PURPLE, C_RED
+from ui.plots import PlotManager, style_axes, CARD, BORDER, MUTED
 
 
 GENRES = ["Clásica / barroca", "Electrónica", "Salsa", "Música de cantina", "Reguetón"]
@@ -232,9 +232,13 @@ class AudioDSPApp:
         self.bits_combo.bind("<<ComboboxSelected>>", self._on_bits_selected)
         self.fs_combo.bind("<<ComboboxSelected>>", self._on_fs_selected)
         ttk.Label(panel, text="V MÍNIMO (V)", style="Field.TLabel").grid(row=0, column=2, sticky="w", padx=(0, 7))
-        ttk.Entry(panel, textvariable=self.vmin_var, width=9).grid(row=1, column=2, sticky="ew", padx=(0, 14), pady=(4, 0))
+        self.vmin_entry = ttk.Entry(panel, textvariable=self.vmin_var, width=9)
+        self.vmin_entry.grid(row=1, column=2, sticky="ew", padx=(0, 14), pady=(4, 0))
+        self.vmin_entry.bind("<Return>", lambda e: self._apply_parameters())
         ttk.Label(panel, text="V MÁXIMO (V)", style="Field.TLabel").grid(row=0, column=3, sticky="w", padx=(0, 7))
-        ttk.Entry(panel, textvariable=self.vmax_var, width=9).grid(row=1, column=3, sticky="ew", padx=(0, 14), pady=(4, 0))
+        self.vmax_entry = ttk.Entry(panel, textvariable=self.vmax_var, width=9)
+        self.vmax_entry.grid(row=1, column=3, sticky="ew", padx=(0, 14), pady=(4, 0))
+        self.vmax_entry.bind("<Return>", lambda e: self._apply_parameters())
         ttk.Button(panel, text="Aplicar y recalcular", style="Accent.TButton", command=self._apply_parameters).grid(row=1, column=4, padx=(0, 10), pady=(4, 0))
         ttk.Button(panel, text="Exportar CSV", command=self._export_csv).grid(row=1, column=5, padx=(0, 8), pady=(4, 0))
         ttk.Button(panel, text="Guardar informe TXT", command=self._export_txt).grid(row=1, column=6, pady=(4, 0))
@@ -251,9 +255,13 @@ class AudioDSPApp:
         interval_bar.grid(row=3, column=0, columnspan=7, sticky="ew", pady=(10, 0))
         ttk.Label(interval_bar, text="Intervalo del audio (s):", style="Card.TLabel", font=("Segoe UI", 9, "bold")).pack(side="left", padx=(0, 10))
         ttk.Label(interval_bar, text="Inicio", style="Card.TLabel").pack(side="left", padx=(0, 4))
-        ttk.Entry(interval_bar, textvariable=self.analysis_start_var, width=8).pack(side="left", padx=(0, 10))
+        self.start_entry = ttk.Entry(interval_bar, textvariable=self.analysis_start_var, width=8)
+        self.start_entry.pack(side="left", padx=(0, 10))
+        self.start_entry.bind("<Return>", lambda e: self._apply_time_range())
         ttk.Label(interval_bar, text="Fin", style="Card.TLabel").pack(side="left", padx=(0, 4))
-        ttk.Entry(interval_bar, textvariable=self.analysis_end_var, width=8).pack(side="left", padx=(0, 8))
+        self.end_entry = ttk.Entry(interval_bar, textvariable=self.analysis_end_var, width=8)
+        self.end_entry.pack(side="left", padx=(0, 8))
+        self.end_entry.bind("<Return>", lambda e: self._apply_time_range())
         ttk.Button(interval_bar, text="Aplicar intervalo", command=self._apply_time_range).pack(side="left", padx=(0, 14))
         ttk.Button(interval_bar, text="▶ Reproducir canción", style="Play.TButton", command=self._play_full_audio).pack(side="left", padx=(0, 8))
         ttk.Button(interval_bar, text="▶ Reproducir intervalo", style="Play.TButton", command=self._play_selected_fragment).pack(side="left", padx=(0, 8))
@@ -795,7 +803,7 @@ class AudioDSPApp:
             return [0.0] * len(self._FREQ_BANDS)
         energies = []
         for _, f_lo, f_hi in self._FREQ_BANDS:
-            mask = (frequencies >= f_lo) & (frequencies < (f_hi if f_hi else np.inf))
+            mask = (frequencies >= f_lo) & (frequencies < (f_hi if f_hi is not None else np.inf))
             e = float(np.sum(np.square(magnitudes[mask])))
             energies.append(100.0 * e / total)
         return energies

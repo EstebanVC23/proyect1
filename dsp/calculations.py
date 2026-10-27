@@ -51,7 +51,7 @@ def generate_multitone_signal(
     if sample_rate <= 0:
         raise ValueError("La tasa de muestreo debe ser mayor que cero.")
 
-    n_points = int(round(duration * sample_rate))
+    n_points = max(1, int(round(duration * sample_rate)))
     t_c = np.linspace(0.0, float(duration), n_points, endpoint=endpoint, dtype=np.float64)
     x_c = np.zeros_like(t_c)
     for f, a in zip(frequencies, amplitudes):
@@ -71,6 +71,10 @@ def generate_twotone_signal(
         t = np.linspace(0, 1, 4000)
         x = np.sin(2 * np.pi * f1 * t) + np.sin(2 * np.pi * f2 * t)
     """
+    if duration <= 0:
+        raise ValueError("La duración debe ser positiva.")
+    if n_points <= 0:
+        raise ValueError("El número de puntos debe ser mayor que cero.")
     t = np.linspace(0.0, float(duration), int(n_points), dtype=np.float64)
     x = np.sin(2.0 * np.pi * float(f1) * t) + np.sin(2.0 * np.pi * float(f2) * t)
     return t, x
@@ -126,6 +130,8 @@ def calculate_sampling_grid(duration: float, fs: float) -> Tuple[np.ndarray, flo
     fs_val = float(fs)
     if fs_val <= 0:
         raise ValueError("La frecuencia de muestreo debe ser positiva.")
+    if duration < 0:
+        raise ValueError("La duración no puede ser negativa.")
     ts = 1.0 / fs_val
     n_samples = max(0, int(round(duration * fs_val)))
     t_muestras = np.arange(n_samples, dtype=np.float64) / fs_val
@@ -377,9 +383,14 @@ def compute_relative_db_spectrum(
     mag = np.asarray(magnitudes, dtype=np.float64)
 
     if max_frequency is not None:
+        if max_frequency < 0:
+            raise ValueError("La frecuencia máxima de corte no puede ser negativa.")
         mask = f <= float(max_frequency)
         f = f[mask]
         mag = mag[mask]
+
+    if f.size == 0 or mag.size == 0:
+        return np.empty(0, dtype=np.float64), np.empty(0, dtype=np.float64)
 
     if mag.size and np.max(mag) > 0:
         peak = float(np.max(mag))

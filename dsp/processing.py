@@ -25,6 +25,8 @@ def resample_signal(signal: np.ndarray, fs_in: int, fs_out: int) -> np.ndarray:
 
 def magnitude_spectrum(signal: np.ndarray, fs: int) -> Tuple[np.ndarray, np.ndarray]:
     """FFT de magnitud con ventana Hann; la FFT se usa para analizar, no para muestrear."""
+    if fs <= 0:
+        raise ValueError("La frecuencia de muestreo debe ser mayor que cero.")
     x = np.asarray(signal, dtype=np.float64).reshape(-1)
     if x.size < 2:
         return np.array([0.0]), np.array([0.0])
@@ -82,7 +84,12 @@ def quantize_adc(signal: np.ndarray, bits: int, vmin: float, vmax: float) -> Dic
     max_error_volts = float(np.max(np.abs(error_volts))) if x.size else 0.0
     signal_rms = float(np.sqrt(np.mean(np.square(clipped)))) if x.size else 0.0
     error_rms = float(np.sqrt(np.mean(np.square(error_signal)))) if x.size else 0.0
-    snr_db = float(20.0 * np.log10(signal_rms / error_rms)) if error_rms > 0 and signal_rms > 0 else float("inf")
+    if error_rms <= 0:
+        snr_db = float("inf")
+    elif signal_rms <= 0:
+        snr_db = float("-inf")
+    else:
+        snr_db = float(20.0 * np.log10(signal_rms / error_rms))
 
     return {
         "bits": int(bits),
@@ -126,6 +133,8 @@ def analyze_audio(signal: np.ndarray, fs_original: int, fs_processing: int,
         raise ValueError("La frecuencia de muestreo debe ser positiva.")
     if fs_processing > 192000:
         raise ValueError("Para esta aplicación, la frecuencia de procesamiento máxima es 192000 Hz.")
+    if max_seconds <= 0:
+        raise ValueError("La duración máxima de análisis debe ser positiva.")
 
     n_limit = max(1, int(round(float(max_seconds) * fs_original)))
     original = original_all[:n_limit]
