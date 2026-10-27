@@ -288,7 +288,7 @@ class PlotManager:
 
         ax.step(ts, quant_v, where="post", linewidth=0.85, color=C_GREEN, label=f"ADC ({bits} bits, {levels} niv.)")
         snr_str = f"{snr_db:.1f} dB" if snr_db < 200 else "∞"
-        ax.set_title(f"ADC · {bits} bits ({levels} niveles) · ΔV = {delta_v * 1000:.1f} mV · SNR = {snr_str}")
+        ax.set_title(f"ADC · {bits} bits ({levels} niveles)")
         ax.set_xlabel("Tiempo de la canción (s)")
         ax.set_ylabel("Voltaje cuantizado (V)")
         ax.set_ylim(vmin_adc - 0.4, vmax_adc + 0.4)
@@ -298,13 +298,13 @@ class PlotManager:
         style_axes(ax)
         ax.legend(fontsize=7, loc="upper right")
 
-        # 4. Reconstrucción DAC (ZOH)
+        # 4. Reconstrucción DAC
         ax = self.ax_reconstructed
         ax.clear()
         ax.set_axis_on()
         ax.plot(t0, result["original"], linewidth=0.65, alpha=0.65, color=C_BLUE, label="Original")
-        ax.step(t0, result["reconstructed"], where="post", linewidth=0.8, color=C_PURPLE, label=f"DAC · ZOH ({bits} bits)")
-        ax.set_title(f"Reconstrucción DAC · RMSE = {result['reconstruction_rmse']:.5f} · MAE = {result['reconstruction_mae']:.5f}")
+        ax.step(t0, result["reconstructed"], where="post", linewidth=0.8, color=C_PURPLE, label=f"DAC ({bits} bits)")
+        ax.set_title(f"Reconstrucción DAC")
         ax.set_xlabel("Tiempo de la canción (s)")
         ax.set_ylabel("Amplitud normalizada")
         style_axes(ax)

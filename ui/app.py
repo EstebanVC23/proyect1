@@ -350,10 +350,10 @@ class AudioDSPApp:
         compare_paned.add(compare_plot_frame, weight=3)
         compare_paned.add(compare_table_frame, weight=2)
 
-        compare_table_columns = ("genre", "dominant", "nyquist", "bits", "levels", "qerror", "dacerror")
+        compare_table_columns = ("genre", "dominant", "nyquist", "bits", "levels")
         self.compare_tree = ttk.Treeview(compare_table_frame, columns=compare_table_columns, show="headings", height=6)
-        headings = {"genre": "Género", "dominant": "Frecuencia dominante (Hz)", "nyquist": "Nyquist (Hz)", "bits": "Bits", "levels": "Niveles", "qerror": "RMSE cuantización", "dacerror": "RMSE DAC"}
-        widths = {"genre": 130, "dominant": 145, "nyquist": 100, "bits": 50, "levels": 65, "qerror": 120, "dacerror": 100}
+        headings = {"genre": "Género", "dominant": "Frecuencia dominante (Hz)", "nyquist": "Nyquist (Hz)", "bits": "Bits", "levels": "Niveles"}
+        widths = {"genre": 130, "dominant": 145, "nyquist": 100, "bits": 50, "levels": 65}
         for col in compare_table_columns:
             self.compare_tree.heading(col, text=headings[col])
             self.compare_tree.column(col, width=widths[col], anchor="center")
