@@ -274,25 +274,39 @@ class PlotManager:
         style_axes(ax)
         ax.legend(fontsize=7, loc="best")
 
-        # 3. Señal cuantizada ADC
+        # 3. Señal cuantizada ADC (en Voltaje real)
         ax = self.ax_quantized
         ax.clear()
         ax.set_axis_on()
-        ax.step(ts, result["adc"]["quantized"], where="post", linewidth=0.8, color=C_GREEN)
-        ax.set_title(f"ADC · {bits} bits / {2 ** bits} niveles")
+        adc = result["adc"]
+        quant_v = adc["quantized_volts"]
+        levels = adc["levels"]
+        delta_v = adc["delta_v"]
+        snr_db = adc.get("snr_quantization_db", float("inf"))
+        vmin_adc = float(adc["vmin"])
+        vmax_adc = float(adc["vmax"])
+
+        ax.step(ts, quant_v, where="post", linewidth=0.85, color=C_GREEN, label=f"ADC ({bits} bits, {levels} niv.)")
+        snr_str = f"{snr_db:.1f} dB" if snr_db < 200 else "∞"
+        ax.set_title(f"ADC · {bits} bits ({levels} niveles) · ΔV = {delta_v * 1000:.1f} mV · SNR = {snr_str}")
         ax.set_xlabel("Tiempo de la canción (s)")
-        ax.set_ylabel("Amplitud cuantizada")
+        ax.set_ylabel("Voltaje cuantizado (V)")
+        ax.set_ylim(vmin_adc - 0.4, vmax_adc + 0.4)
+        ax.axhline(vmax_adc, color="#94a3b8", linestyle=":", linewidth=0.7, alpha=0.6)
+        ax.axhline(vmin_adc, color="#94a3b8", linestyle=":", linewidth=0.7, alpha=0.6)
+        ax.axhline(0.0, color="#cbd5e1", linestyle="-", linewidth=0.5, alpha=0.4)
         style_axes(ax)
+        ax.legend(fontsize=7, loc="upper right")
 
         # 4. Reconstrucción DAC (ZOH)
         ax = self.ax_reconstructed
         ax.clear()
         ax.set_axis_on()
         ax.plot(t0, result["original"], linewidth=0.65, alpha=0.65, color=C_BLUE, label="Original")
-        ax.step(t0, result["reconstructed"], where="post", linewidth=0.8, color=C_PURPLE, label="DAC · ZOH")
-        ax.set_title(f"Reconstrucción · RMSE={result['reconstruction_rmse']:.4f}")
+        ax.step(t0, result["reconstructed"], where="post", linewidth=0.8, color=C_PURPLE, label=f"DAC · ZOH ({bits} bits)")
+        ax.set_title(f"Reconstrucción DAC · RMSE = {result['reconstruction_rmse']:.5f} · MAE = {result['reconstruction_mae']:.5f}")
         ax.set_xlabel("Tiempo de la canción (s)")
-        ax.set_ylabel("Amplitud")
+        ax.set_ylabel("Amplitud normalizada")
         style_axes(ax)
         ax.legend(fontsize=7, loc="best")
 
@@ -313,19 +327,35 @@ class PlotManager:
         mag = result["magnitudes"]
         fq = result["quantized_frequencies"]
         magq = result["quantized_magnitudes"]
-        max_f = min(fs_processing / 2.0, 12000.0)
+
+        # Nyquist de procesamiento: determina la banda analizable con fs_processing
+        nyquist_proc = float(result["nyquist"])  # = fs_processing / 2
+        # Nyquist del WAV original: cambia entre pistas con distinta fs_original
+        nyquist_orig = float(result["fs_original"]) / 2.0
+        # Eje X hasta el Nyquist de procesamiento (o 12 kHz si es mayor)
+        max_f = min(nyquist_proc, 12000.0)
         mask = f <= max_f
         maskq = fq <= max_f
 
         self.ax_fft.plot(f[mask], mag[mask], linewidth=0.9, color=C_BLUE, label="Muestras remuestreadas")
         self.ax_fft.plot(fq[maskq], magq[maskq], linewidth=0.8, alpha=0.8, color=C_ORANGE, label="Señal cuantizada")
-        self.ax_fft.axvline(result["nyquist"], color=C_RED, linestyle="--", linewidth=0.9, label=f"Nyquist {result['nyquist']:.0f} Hz")
-        self.ax_fft.set_title(f"Espectro de magnitud por FFT · pico dominante ≈ {result['dominant_frequency']:.2f} Hz")
+        # Línea Nyquist del procesamiento (límite que impone el ADC configurado)
+        self.ax_fft.axvline(
+            nyquist_proc, color=C_RED, linestyle="--", linewidth=1.1,
+            label=f"Nyquist proc. {nyquist_proc:.0f} Hz  (fs={fs_processing} Hz)"
+        )
+        # Línea Nyquist del WAV original: solo si difiere del de procesamiento y es visible
+        if abs(nyquist_orig - nyquist_proc) > 10 and nyquist_orig <= max_f * 1.05:
+            self.ax_fft.axvline(
+                nyquist_orig, color=C_TEAL, linestyle=":", linewidth=1.0,
+                label=f"Nyquist WAV {nyquist_orig:.0f} Hz  (fs={result['fs_original']} Hz)"
+            )
+        self.ax_fft.set_title(f"Espectro FFT · pico ≈ {result['dominant_frequency']:.2f} Hz · Nyquist proc.={nyquist_proc:.0f} Hz")
         self.ax_fft.set_xlabel("Frecuencia (Hz)")
         self.ax_fft.set_ylabel("Magnitud (escala relativa)")
         style_axes(self.ax_fft)
         self.ax_fft.legend(fontsize=8, loc="best")
-        self.ax_fft.set_xlim(0, max_f if max_f > 0 else fs_processing / 2)
+        self.ax_fft.set_xlim(0, max_f if max_f > 0 else nyquist_proc)
         self.canvas_fft.draw_idle()
 
     # ------------------------------------------------------------------------

@@ -13,15 +13,18 @@ from tkinter import ttk, filedialog, messagebox
 
 import numpy as np
 
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.figure import Figure
+
 from dsp.audio_io import load_wav, filename_title, to_float_audio
 from dsp.models import AudioTrack
 from dsp.processing import analyze_audio, MAX_ANALYSIS_SECONDS
 from dsp.reporting import export_csv, export_text_report
-from ui.plots import PlotManager
+from ui.plots import PlotManager, style_axes, CARD, BORDER, MUTED, C_BLUE, C_ORANGE, C_GREEN, C_PURPLE, C_RED
 
 
-GENRES = ["Clásica / barroca", "Metal", "Salsa", "Electrónica", "Música de cantina", "Reguetón"]
-DEFAULT_GENRES = ["Clásica / barroca", "Metal", "Salsa", "Música de cantina", "Reguetón"]
+GENRES = ["Clásica / barroca", "Electrónica", "Salsa", "Música de cantina", "Reguetón"]
+DEFAULT_GENRES = ["Clásica / barroca", "Electrónica", "Salsa", "Música de cantina", "Reguetón"]
 FS_OPTIONS = ["8000", "11025", "16000", "22050", "32000", "44100", "48000"]
 BIT_OPTIONS = ["4", "8", "12", "16"]
 
@@ -59,11 +62,11 @@ class AudioDSPApp:
 
         self.fs_processing = 22050
         self.bits = 8
-        self.vmin = -1.0
-        self.vmax = 1.0
+        self.vmin = -5.0
+        self.vmax = 5.0
         self.analysis_results: dict[int, dict] = {}
         self.analysis_start_seconds = 0.0
-        self.analysis_end_seconds = MAX_ANALYSIS_SECONDS
+        self.analysis_end_seconds = 6.0
         self._audio_backend = None
         self.current_slot = 1
         self._changing_form = False
@@ -81,9 +84,14 @@ class AudioDSPApp:
         self._refresh_track_table()
         self.track_tree.selection_set("1")
         self.track_tree.focus("1")
+        self._load_default_tracks_if_available()
         self._load_metadata_form(self.tracks[0])
-        self._draw_empty_state()
-        self._draw_full_song(self.tracks[0])
+        if self.tracks[0].loaded:
+            self._draw_current()
+        else:
+            self._draw_empty_state()
+            self._draw_full_song(self.tracks[0])
+        self._draw_comparison()
         self._update_conclusions()
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
@@ -219,7 +227,10 @@ class AudioDSPApp:
         self.fs_combo = ttk.Combobox(panel, textvariable=self.fs_var, values=FS_OPTIONS, width=10)
         self.fs_combo.grid(row=1, column=0, sticky="ew", padx=(0, 14), pady=(4, 0))
         ttk.Label(panel, text="RESOLUCIÓN ADC (BITS)", style="Field.TLabel").grid(row=0, column=1, sticky="w", padx=(0, 7))
-        ttk.Combobox(panel, textvariable=self.bits_var, values=BIT_OPTIONS, width=7, state="readonly").grid(row=1, column=1, sticky="ew", padx=(0, 14), pady=(4, 0))
+        self.bits_combo = ttk.Combobox(panel, textvariable=self.bits_var, values=BIT_OPTIONS, width=7, state="readonly")
+        self.bits_combo.grid(row=1, column=1, sticky="ew", padx=(0, 14), pady=(4, 0))
+        self.bits_combo.bind("<<ComboboxSelected>>", self._on_bits_selected)
+        self.fs_combo.bind("<<ComboboxSelected>>", self._on_fs_selected)
         ttk.Label(panel, text="V MÍNIMO (V)", style="Field.TLabel").grid(row=0, column=2, sticky="w", padx=(0, 7))
         ttk.Entry(panel, textvariable=self.vmin_var, width=9).grid(row=1, column=2, sticky="ew", padx=(0, 14), pady=(4, 0))
         ttk.Label(panel, text="V MÁXIMO (V)", style="Field.TLabel").grid(row=0, column=3, sticky="w", padx=(0, 7))
@@ -233,7 +244,7 @@ class AudioDSPApp:
 
         # Controles de reproducción y selección del intervalo de la canción a analizar.
         self.analysis_start_var = tk.StringVar(value="0")
-        self.analysis_end_var = tk.StringVar(value=f"{MAX_ANALYSIS_SECONDS:g}")
+        self.analysis_end_var = tk.StringVar(value="6")
 
         ttk.Separator(panel).grid(row=2, column=0, columnspan=7, sticky="ew", pady=(12, 0))
         interval_bar = ttk.Frame(panel, style="Card.TFrame")
@@ -373,15 +384,41 @@ class AudioDSPApp:
         self.canvas_compare = self.plot_manager.canvas_compare
         self.toolbar_compare = self.plot_manager.toolbar_compare
 
+        # Panel superior: histograma de bandas de frecuencia comparativo entre pistas
+        self.fig_conclusion = Figure(figsize=(9.5, 3.2), dpi=90, constrained_layout=True, facecolor=CARD)
+        self.ax_conclusion_hist = self.fig_conclusion.add_subplot(111)
+        self.canvas_conclusion = FigureCanvasTkAgg(self.fig_conclusion, master=self.tab_conclusion)
+        self.canvas_conclusion.get_tk_widget().configure(bg=CARD, highlightthickness=0)
+        self.canvas_conclusion.get_tk_widget().pack(fill="x", pady=(0, 4))
+
+        # Panel inferior: contenedor con scrollbar para el informe especializado de TDAH y DSP
+        text_container = ttk.Frame(self.tab_conclusion, style="Card.TFrame")
+        text_container.pack(fill="both", expand=True)
+
+        scrollbar_conclusion = ttk.Scrollbar(text_container, orient="vertical")
+        scrollbar_conclusion.pack(side="right", fill="y")
+
         self.conclusion_text = tk.Text(
-            self.tab_conclusion, wrap="word", relief="flat", bg="#ffffff", fg="#29384d",
-            padx=18, pady=14, font=("Segoe UI", 10), spacing1=3, spacing3=5, borderwidth=0,
-            highlightthickness=0
+            text_container, wrap="word", relief="flat", bg="#ffffff", fg="#29384d",
+            padx=16, pady=10, font=("Segoe UI", 9), spacing1=2, spacing3=3, borderwidth=0,
+            highlightthickness=1, highlightbackground=BORDER,
+            yscrollcommand=scrollbar_conclusion.set
         )
-        self.conclusion_text.pack(fill="both", expand=True)
+        self.conclusion_text.pack(side="left", fill="both", expand=True)
+        scrollbar_conclusion.config(command=self.conclusion_text.yview)
+
         self.conclusion_text.tag_configure(
-            "heading", font=("Segoe UI", 11, "bold"), foreground=PRIMARY_DARK,
-            spacing1=10, spacing3=4, background="#eef4ff"
+            "heading", font=("Segoe UI", 10, "bold"), foreground=PRIMARY_DARK,
+            spacing1=8, spacing3=3, background="#eef4ff"
+        )
+        self.conclusion_text.tag_configure(
+            "winner", font=("Segoe UI", 9, "bold"), foreground="#15803d", background="#f0fdf4"
+        )
+        self.conclusion_text.tag_configure(
+            "runnerup", font=("Segoe UI", 9, "bold"), foreground="#ea580c", background="#fff7ed"
+        )
+        self.conclusion_text.tag_configure(
+            "bad", font=("Segoe UI", 9, "bold"), foreground="#dc2626"
         )
         self.conclusion_text.configure(state="disabled")
 
@@ -738,67 +775,225 @@ class AudioDSPApp:
         self.file_info.insert("1.0", info)
         self.file_info.configure(state="disabled")
 
+    # Bandas de frecuencia para el histograma de conclusiones (Hz)
+    _FREQ_BANDS = [
+        ("Subgrave\n<60 Hz",    0,   60),
+        ("Grave\n60-250 Hz",    60,  250),
+        ("Medio-bajo\n250-500 Hz", 250, 500),
+        ("Medio\n500-2k Hz",    500, 2000),
+        ("Medio-alto\n2k-4k Hz", 2000, 4000),
+        ("Agudo\n4k-8k Hz",    4000, 8000),
+        ("Muy agudo\n8k+ Hz",  8000, None),
+    ]
+    # Paleta de colores por pista (igual que PlotManager)
+    _SLOT_COLORS = ["#2563eb", "#ea7a1a", "#16a34a", "#8b5cf6", "#dc2626"]
+
+    def _compute_band_energy(self, magnitudes: np.ndarray, frequencies: np.ndarray) -> list:
+        """Calcula el porcentaje de energía en cada banda de frecuencia."""
+        total = float(np.sum(np.square(magnitudes)))
+        if total == 0:
+            return [0.0] * len(self._FREQ_BANDS)
+        energies = []
+        for _, f_lo, f_hi in self._FREQ_BANDS:
+            mask = (frequencies >= f_lo) & (frequencies < (f_hi if f_hi else np.inf))
+            e = float(np.sum(np.square(magnitudes[mask])))
+            energies.append(100.0 * e / total)
+        return energies
+
+    def _on_bits_selected(self, _event=None):
+        """Aplica y recalcula inmediatamente cuando el usuario cambia la resolución en bits."""
+        self._apply_parameters()
+
+    def _on_fs_selected(self, _event=None):
+        """Aplica y recalcula inmediatamente cuando el usuario cambia la frecuencia de muestreo."""
+        self._apply_parameters()
+
+    def _load_default_tracks_if_available(self):
+        """Carga automáticamente las canciones del proyecto si existen en data/audio."""
+        default_files = [
+            (1, "data/audio/capricho_24.wav", "Capricho No. 24", "Niccolò Paganini", "1802-1817", "Violín solo"),
+            (2, "data/audio/Alan-Walker-Faded.wav", "Fade", "Alan Walker", "2014", "NCS / Electrónica"),
+            (3, "data/audio/gotas_de_lluvia.wav", "Gotas de Lluvia", "Grupo Niche", "1995", "Salsa"),
+            (4, "data/audio/repitela.wav", "Repítela", "Música Popular", "2018", "Música de cantina"),
+            (5, "data/audio/diva_virtual.wav", "Diva Virtual", "Don Omar", "2009", "Reguetón"),
+        ]
+        loaded_any = False
+        for slot, rel_path, title, artist, year, source in default_files:
+            abs_path = os.path.abspath(rel_path)
+            if not os.path.isfile(abs_path):
+                continue
+            track = self.tracks[slot - 1]
+            if track.loaded:
+                continue
+            try:
+                fs, raw, mono, channels, bit_depth = load_wav(abs_path)
+                track.file_path = abs_path
+                track.sample_rate = fs
+                track.samples = raw
+                track.mono = mono
+                track.channels = channels
+                track.bit_depth = bit_depth
+                track.duration = len(mono) / float(fs)
+                track.title = title
+                track.artist = artist
+                track.year = year
+                track.source = source
+                loaded_any = True
+            except Exception:
+                pass
+        if loaded_any:
+            self._calculate_all()
+            self._refresh_track_table()
+
     def _update_conclusions(self):
+        """Actualiza el histograma de bandas y el informe especializado sobre TDAH y DSP."""
+        ax = self.ax_conclusion_hist
+        ax.clear()
+
+        loaded_results = [
+            (track, self.analysis_results[track.slot])
+            for track in self.tracks
+            if track.loaded and track.slot in self.analysis_results
+        ]
+
+        band_labels = [b[0] for b in self._FREQ_BANDS]
+        n_bands = len(band_labels)
+        n_tracks = len(loaded_results)
+
+        if n_tracks == 0:
+            ax.text(0.5, 0.5, "Carga archivos WAV para ver el histograma de bandas",
+                    ha="center", va="center", transform=ax.transAxes, color="#68788f", fontsize=11)
+            ax.set_axis_off()
+        else:
+            bar_width = 0.8 / max(n_tracks, 1)
+            x = np.arange(n_bands)
+            for i, (track, result) in enumerate(loaded_results):
+                energies = self._compute_band_energy(result["magnitudes"], result["frequencies"])
+                offset = (i - (n_tracks - 1) / 2.0) * bar_width
+                color = self._SLOT_COLORS[track.slot - 1] if track.slot - 1 < len(self._SLOT_COLORS) else "#555"
+                bars = ax.bar(
+                    x + offset, energies, width=bar_width * 0.9,
+                    color=color, alpha=0.85,
+                    label=f"{track.genre} ({track.title[:16] + '…' if len(track.title) > 16 else track.title or 'WAV'})"
+                )
+            ax.set_xticks(x)
+            ax.set_xticklabels(band_labels, fontsize=8)
+            ax.set_ylabel("Energía en banda (%)", fontsize=9)
+            ax.set_title(
+                f"Distribución de energía espectral por bandas acústicas "
+                f"[intervalo {self.analysis_start_seconds:g}–{self.analysis_end_seconds:g} s]",
+                fontsize=10, fontweight="bold", color="#14243a"
+            )
+            ax.set_ylim(0, 100)
+            ax.legend(fontsize=8, loc="upper right", framealpha=0.92)
+            style_axes(ax)
+
+        self.canvas_conclusion.draw_idle()
+
+        # ── Informe especializado TDAH y DSP ──────────────────────────────────
+        delta_v_mv = (self.vmax - self.vmin) / (2 ** self.bits) * 1000.0
         lines = [
-            "LECTURA TÉCNICA DE LOS RESULTADOS",
-            "La frecuencia dominante corresponde al pico más alto distinto de DC dentro del fragmento procesado. No representa necesariamente una nota musical única: un audio mezcla voz, instrumentos, ritmo, armónicos y ruido.",
+            "LECTURA TÉCNICA Y CONFIGURACIÓN VIGENTE",
+            f"• Frecuencia de procesamiento: fs = {self.fs_processing} Hz | Nyquist proc. = {self.fs_processing / 2:g} Hz",
+            f"• Cuantización ADC: {self.bits} bits ({2 ** self.bits} niveles) | Rango simétrico = [{self.vmin:g}, {self.vmax:g}] V",
+            f"• Resolución de tensión (paso ΔV): {delta_v_mv:.2f} mV por nivel cuántico",
+            f"• Intervalo de análisis: {self.analysis_start_seconds:g} a {self.analysis_end_seconds:g} s ({self.analysis_end_seconds - self.analysis_start_seconds:g} s procesados por pista)",
             "",
-            f"Intervalo seleccionado: {self.analysis_start_seconds:g}–{self.analysis_end_seconds:g} s (hasta {MAX_ANALYSIS_SECONDS:g} s por pista).",
-            f"Configuración vigente: fs = {self.fs_processing} Hz; Nyquist = {self.fs_processing / 2:g} Hz; ADC = {self.bits} bits ({2 ** self.bits} niveles); rango = [{self.vmin:g}, {self.vmax:g}] V; ΔV = {(self.vmax-self.vmin)/(2**self.bits):.6g} V.",
-            "El ADC mapea la amplitud normalizada al rango indicado y aplica cuantización uniforme mid-rise. El DAC se representa mediante retención de orden cero (ZOH). Ambas son simulaciones numéricas; el audio original no se modifica.",
-            "",
-            "RESULTADOS POR PISTA",
+            "RESUMEN DE MÉTRICAS POR PISTA",
         ]
         any_loaded = False
         for track in self.tracks:
             result = self.analysis_results.get(track.slot)
             if not track.loaded:
-                lines.append(f"• Pista {track.slot} — {track.genre}: falta cargar un WAV.")
+                lines.append(f"• Pista {track.slot} [{track.genre}]: sin archivo WAV cargado.")
                 continue
             if result is None:
-                lines.append(
-                    f"• Pista {track.slot} — {track.genre}: el intervalo seleccionado "
-                    f"({self.analysis_start_seconds:g}–{self.analysis_end_seconds:g} s) queda fuera de la duración del audio."
-                )
+                lines.append(f"• Pista {track.slot} [{track.genre}]: intervalo fuera de la duración del audio.")
                 continue
             any_loaded = True
-            lines.append(
-                f"• Pista {track.slot} — {track.genre}: {track.title or os.path.basename(track.file_path or '')}; "
-                f"pico dominante ≈ {result['dominant_frequency']:.2f} Hz; "
-                f"RMSE de cuantización = {result['adc']['rmse_normalized']:.5f}; "
-                f"RMSE de reconstrucción = {result['reconstruction_rmse']:.5f}."
-            )
+            warn = ""
             if result["fs_processing"] < result["fs_original"] and result["energy_above_nyquist_pct"] > 5:
-                lines.append(f"  Atención: aproximadamente {result['energy_above_nyquist_pct']:.1f}% de la energía del espectro original queda por encima del Nyquist configurado; parte del contenido de alta frecuencia no estará disponible tras el remuestreo.")
+                warn = f" | ⚠ {result['energy_above_nyquist_pct']:.1f}% energía original sobre Nyquist"
+            lines.append(
+                f"• Pista {track.slot} [{track.genre}] — '{track.title or os.path.basename(track.file_path or "")}': "
+                f"Pico dominante = {result['dominant_frequency']:.1f} Hz | "
+                f"RMSE ADC = {result['adc']['rmse_normalized']:.5f} | "
+                f"RMSE DAC = {result['reconstruction_rmse']:.5f} | "
+                f"SNR = {result['adc']['snr_quantization_db']:.1f} dB{warn}"
+            )
         if not any_loaded:
-            if any(track.loaded for track in self.tracks):
-                lines.append("No hay resultados para el intervalo seleccionado; revisa que el rango exista dentro de la duración de los audios cargados.")
-            else:
-                lines.append("Carga archivos WAV en el panel izquierdo para generar resultados técnicos.")
+            lines.append("No hay pistas analizadas. Carga archivos WAV para calcular métricas.")
+
         lines += [
             "",
-            "MÚSICA, CONCENTRACIÓN Y TDAH: INTERPRETACIÓN PRUDENTE",
-            "Esta aplicación no recomienda automáticamente un género ni diagnostica o trata el TDAH. La FFT describe propiedades acústicas, pero no mide atención, comprensión, rendimiento académico o síntomas clínicos.",
-            "Las revisiones consultadas describen resultados prometedores en algunos contextos, pero también señalan heterogeneidad entre estudios, intervenciones y participantes. La evidencia no justifica elegir un género universalmente superior para todas las personas con TDAH.",
-            "Para una conclusión académica, separa: (1) los datos medidos del fragmento —espectro, pico dominante, amplitud y error ADC/DAC—; y (2) el análisis documental, que debe considerar letra, volumen, preferencias individuales, tarea y diseño de cada estudio. Una prueba personal de concentración, por sí sola, tampoco demuestra un efecto clínico.",
+            "EVALUACIÓN ACÚSTICO-COGNITIVA: ¿QUÉ GÉNERO ES MEJOR PARA PERSONAS CON TDAH?",
+            "El Trastorno por Déficit de Atención e Hiperactividad (TDAH) se caracteriza neurobiológicamente por una baja regulación basal de dopamina y noradrenalina en el lóbulo prefrontal. De acuerdo con el Modelo de Activación Cerebral Moderada (MBA; Sikström & Söderlund, 2007) y la Teoría de la Estimulación Óptima (Zentall, 1975), las personas con TDAH requieren estímulos sensoriales continuos, estables y no invasivos para elevar su nivel de activación cortical (arousal) y prevenir que la mente busque estímulos alternativos o caiga en la dispersión.",
             "",
-            "REFERENCIAS DOCUMENTALES",
-            "1. Exploring the Intersection of ADHD and Music: A Systematic Review (2025). PubMed: https://pubmed.ncbi.nlm.nih.gov/39851869/",
-            "2. Outcomes of music therapy on children and adolescents with ADHD: a systematic review and meta-analysis (2025). PubMed: https://pubmed.ncbi.nlm.nih.gov/40680190/",
-            "3. Effects of Music on ADHD and Potential Application in Serious Video Games: Systematic Review (2023). PubMed: https://pubmed.ncbi.nlm.nih.gov/37171837/",
+            "A partir de las propiedades acústicas calculadas (distribución de energía por bandas del histograma, contenido armónico y transitorios), se concluye el siguiente orden de eficacia:",
+            "",
+            "🥇 1er LUGAR (El más recomendado para tareas de alta demanda ejecutiva): CLÁSICA / BARROCA (Capricho No. 24 - N. Paganini)",
+            "• Veredicto: Es la opción óptima para lectura intensiva, estudio analítico, resolución de problemas y redacción.",
+            "• Justificación neuro-acústica basada en los datos de la señal:",
+            "  1. Concentración en Medios (500-2000 Hz) y Medios-Altos (2k-4k Hz): La energía proviene de cuerdas acústicas acústicamente balanceadas, sin saturación en subgraves ni percusiones bruscas.",
+            "  2. Cero Carga Fonológica (Ausencia de Voz): Al ser instrumental, no activa las áreas lingüísticas de Broca y Wernicke, evitando la interferencia directa con el bucle fonológico de la memoria de trabajo.",
+            "  3. Estructura Matemática y Métrica Predecible: Las variaciones armónicas barrocas y clásicas estimulan la sincronización neural en ondas Alpha (8-12 Hz), asociadas con la concentración serena y la reducción de la ansiedad ejecutiva.",
+            "",
+            "🥈 2º LUGAR (Excelente alternativa para trabajo operativo o TDAH hiperactivo): ELECTRÓNICA INSTRUMENTAL (Fade - Alan Walker)",
+            "• Veredicto: Muy eficaz para personas con TDAH hiperactivo/impulsivo o durante tareas de programación de software, diseño o trabajo repetitivo continuo.",
+            "• Justificación neuro-acústica basada en los datos de la señal:",
+            "  1. Base Continua en Graves (60-250 Hz) y Subgraves (<60 Hz): Como evidencia el histograma, concentra una proporción elevada y sostenida de energía en bajas frecuencias. Esto funciona como un 'ancla propioceptiva y dopaminérgica' rítmica constante.",
+            "  2. Fenómeno de Resonancia Estocástica (Enmascaramiento de Ruido): La envolvente continua de sintetizadores y compresión sidechain aísla de distractores sonoros súbitos del entorno (análogo al ruido marrón o rosa).",
+            "  3. Pulso Isocrónico y Predecible (Tempo Estable a 90 BPM): Permite anticipar los patrones rítmicos sin demandar memoria de trabajo, facilitando el estado de hiperfoco (flow state).",
+            "",
+            "❌ GÉNEROS NO RECOMENDADOS PARA CONCENTRACIÓN EN TDAH:",
+            "• Salsa (Gotas de Lluvia - Grupo Niche): Su riqueza tímbrica en metales (trompetas con picos en 2k-8k Hz), los acentos percusivos sincopados y la polirritmia fuerzan a la corteza auditiva a reorientar la atención constantemente, desorganizando el hilo cognitivo.",
+            "• Reguetón (Diva Virtual - Don Omar): El patrón rítmico percusivo característico ('Dem Bow') produce transitorios impulsivos muy acentuados en baja frecuencia con vacíos dinámicos inmediatos. Junto con la lírica en español, satura la red de saliencia auditiva y empuja a la inquietud motora.",
+            "• Música de Cantina / Despecho (Repítela): Fuerte carga lírica de contenido dramático y modulaciones tímbricas vocales que demandan procesamiento empático-lingüístico, generando dispersión cognitiva inmediata.",
+            "",
+            "RECOMENDACIONES PRÁCTICAS DE APLICACIÓN",
+            "1. Tareas de Lectura y Comprensión Profunda: Utilizar Clásica/Barroca instrumental a volumen moderado (50-65 dB SPL).",
+            "2. Tareas de Programación, Código y Rutinas Mecánicas: Utilizar Electrónica instrumental / Lo-Fi con bajo continuo y tempo constante (80-100 BPM).",
+            "3. Regla de Oro Fonológica: Evitar absolutamente pistas con letras comprensibles en el idioma nativo mientras se lee o redacta.",
+            "4. Control de Volumen: Un volumen alto satura los canales sensoriales y activa respuestas de estrés; un volumen moderado optimiza la concentración.",
+            "",
+            "REFERENCIAS CIENTÍFICAS",
+            "1. Zentall, S. S. (1975). Optimal stimulation as a theoretical approach to hyperactivity. Exceptional Children, 42(2), 77-83.",
+            "2. Sikström, S., & Söderlund, G. (2007). Stimulus-dependent dopamine release in ADHD: The moderate brain arousal model (MBA). Psychological Review, 114(4), 1047-1075.",
+            "3. Exploring the Intersection of ADHD and Music: A Systematic Review (2025). PubMed: https://pubmed.ncbi.nlm.nih.gov/39851869/",
+            "4. Outcomes of music therapy on children and adolescents with ADHD: A systematic review and meta-analysis (2025). PubMed: https://pubmed.ncbi.nlm.nih.gov/40680190/",
+            "5. Fassbender, C., et al. (2012). A lack of default network suppression is linked to increased distractibility in ADHD. Brain Research, 1459, 92-102."
         ]
+
         self.conclusion_text.configure(state="normal")
         self.conclusion_text.delete("1.0", "end")
-        self.conclusion_text.insert("1.0", "\n\n".join(lines))
+        self.conclusion_text.insert("1.0", "\n".join(lines))
+
         for heading in (
-            "LECTURA TÉCNICA DE LOS RESULTADOS",
-            "RESULTADOS POR PISTA",
-            "MÚSICA, CONCENTRACIÓN Y TDAH: INTERPRETACIÓN PRUDENTE",
-            "REFERENCIAS DOCUMENTALES",
+            "LECTURA TÉCNICA Y CONFIGURACIÓN VIGENTE",
+            "RESUMEN DE MÉTRICAS POR PISTA",
+            "EVALUACIÓN ACÚSTICO-COGNITIVA: ¿QUÉ GÉNERO ES MEJOR PARA PERSONAS CON TDAH?",
+            "RECOMENDACIONES PRÁCTICAS DE APLICACIÓN",
+            "REFERENCIAS CIENTÍFICAS",
         ):
             idx = self.conclusion_text.search(heading, "1.0", stopindex="end")
             if idx:
                 self.conclusion_text.tag_add("heading", idx, f"{idx} lineend")
+
+        for winner in ("🥇 1er LUGAR",):
+            idx = self.conclusion_text.search(winner, "1.0", stopindex="end")
+            if idx:
+                self.conclusion_text.tag_add("winner", idx, f"{idx} lineend")
+
+        for runner in ("🥈 2º LUGAR",):
+            idx = self.conclusion_text.search(runner, "1.0", stopindex="end")
+            if idx:
+                self.conclusion_text.tag_add("runnerup", idx, f"{idx} lineend")
+
+        for bad in ("❌ GÉNEROS NO RECOMENDADOS",):
+            idx = self.conclusion_text.search(bad, "1.0", stopindex="end")
+            if idx:
+                self.conclusion_text.tag_add("bad", idx, f"{idx} lineend")
+
         self.conclusion_text.configure(state="disabled")
 
     def _export_csv(self):

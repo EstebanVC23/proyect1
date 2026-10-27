@@ -4,7 +4,7 @@ Aplicación de escritorio en Python para cargar y comparar fragmentos musicales 
 
 ## 1. Qué incluye
 
-- Biblioteca de cinco pistas para las categorías: clásica/barroca, metal, salsa **o** electrónica, música de cantina y reguetón.
+- Biblioteca de cinco pistas para las categorías: clásica/barroca, electrónica, salsa, música de cantina y reguetón.
 - Carga y reemplazo de archivos WAV desde el computador.
 - Ficha editable con título, compositor/intérprete, año y fuente.
 - Visualización de frecuencia original, canales, duración y profundidad de bits cuando se puede obtener.
