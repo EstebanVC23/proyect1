@@ -262,13 +262,24 @@ class PlotManager:
         ax.clear()
         ax.set_axis_on()
         ax.plot(t0, result["original"], linewidth=0.55, alpha=0.4, color=C_BLUE, label="Referencia WAV")
-        marker_step = max(1, int(np.ceil(len(ts) / 9000)))
-        ax.plot(
-            ts, result["sampled"], linewidth=0.65, color=C_ORANGE, alpha=0.9,
-            marker=".", markersize=2, markevery=marker_step,
-            label="Muestras remuestreadas", zorder=3
+
+        # Limitar stems visibles para mantener rendimiento visual
+        MAX_STEMS = 600
+        stem_step = max(1, int(np.ceil(len(ts) / MAX_STEMS)))
+        ts_stem = ts[::stem_step]
+        s_stem = result["sampled"][::stem_step]
+
+        markerline, stemlines, baseline = ax.stem(
+            ts_stem, s_stem,
+            linefmt="C1-", markerfmt="C1o", basefmt="k-",
+            label="Muestras x[n]"
         )
-        ax.set_title(f"Muestreo · fs={fs_processing} Hz")
+        markerline.set_markersize(3)
+        stemlines.set_linewidth(0.6)
+        baseline.set_linewidth(0.5)
+        baseline.set_alpha(0.4)
+
+        ax.set_title(f"Muestreo · fs={fs_processing} Hz · {len(ts)} muestras")
         ax.set_xlabel("Tiempo de la canción (s)")
         ax.set_ylabel("Amplitud")
         style_axes(ax)
@@ -288,7 +299,7 @@ class PlotManager:
 
         ax.step(ts, quant_v, where="post", linewidth=0.85, color=C_GREEN, label=f"ADC ({bits} bits, {levels} niv.)")
         snr_str = f"{snr_db:.1f} dB" if snr_db < 200 else "∞"
-        ax.set_title(f"ADC · {bits} bits ({levels} niveles) · ΔV = {delta_v * 1000:.1f} mV · SNR = {snr_str}")
+        ax.set_title(f"ADC · {bits} bits ({levels} niveles) · ΔV = {delta_v * 1000:.1f} mV")
         ax.set_xlabel("Tiempo de la canción (s)")
         ax.set_ylabel("Voltaje cuantizado (V)")
         if len(quant_v) > 0:
@@ -311,9 +322,14 @@ class PlotManager:
         ax = self.ax_reconstructed
         ax.clear()
         ax.set_axis_on()
-        ax.plot(t0, result["original"], linewidth=0.65, alpha=0.65, color=C_BLUE, label="Original")
-        ax.step(t0, result["reconstructed"], where="post", linewidth=0.8, color=C_PURPLE, label=f"DAC ({bits} bits)")
-        ax.set_title(f"Reconstrucción DAC")
+        ax.plot(t0, result["original"], linewidth=0.65, alpha=0.5, color=C_BLUE, label="Original WAV")
+        ax.step(t0, result["reconstructed"], where="post", linewidth=0.7,
+                color="#14243a", alpha=0.6, label=f"ZOH DAC ({bits} bits)")
+        # Señal suavizada: simula el filtro analógico de salida del DAC real
+        smooth = result.get("reconstructed_smooth", result["reconstructed"])
+        ax.plot(t0[:len(smooth)], smooth[:len(t0)], linewidth=1.1,
+                color=C_RED, alpha=0.9, label="Señal analógica (filtro DAC)")
+        ax.set_title(f"Reconstrucción DAC · {bits} bits")
         ax.set_xlabel("Tiempo de la canción (s)")
         ax.set_ylabel("Amplitud normalizada")
         style_axes(ax)
@@ -350,7 +366,7 @@ class PlotManager:
         self.ax_fft.plot(fq[maskq], magq[maskq], linewidth=0.8, alpha=0.8, color=C_ORANGE, label="Señal cuantizada")
         # Línea Nyquist del procesamiento (límite que impone el ADC configurado)
         self.ax_fft.axvline(
-            nyquist_proc, color=C_RED, linestyle="--", linewidth=1.1,
+            nyquist_proc, color="#14243a", linestyle="--", linewidth=1.1,
             label=f"Nyquist proc. {nyquist_proc:.0f} Hz  (fs={fs_processing} Hz)"
         )
         # Línea Nyquist del WAV original: solo si difiere del de procesamiento y es visible

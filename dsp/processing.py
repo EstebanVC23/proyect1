@@ -5,6 +5,7 @@ from fractions import Fraction
 from typing import Dict, Any, Tuple
 
 import numpy as np
+from scipy.signal import butter, sosfiltfilt
 from scipy.signal import resample_poly
 
 MAX_ANALYSIS_SECONDS = 10.0
@@ -143,6 +144,18 @@ def analyze_audio(signal: np.ndarray, fs_original: int, fs_processing: int,
 
     adc = quantize_adc(sampled, bits, vmin, vmax)
     reconstructed = zero_order_hold(adc["quantized"], fs_processing, t_original)
+
+    # Filtro de reconstrucción DAC: Butterworth pasa-bajos a Nyquist
+    # Simula el filtro analógico de salida que suaviza los escalones ZOH.
+    try:
+        nyq = float(fs_processing) / 2.0
+        # Frecuencia de corte ligeramente por debajo de Nyquist para evitar inestabilidad
+        cutoff = min(nyq * 0.9, nyq - 1.0) if nyq > 2.0 else nyq * 0.8
+        # fs_original es la tasa de t_original; normalizar respecto a ella
+        sos = butter(4, cutoff, btype="low", fs=fs_original, output="sos")
+        reconstructed_smooth = sosfiltfilt(sos, reconstructed)
+    except Exception:
+        reconstructed_smooth = reconstructed.copy()
     compare_len = min(original.size, reconstructed.size)
     err = original[:compare_len] - reconstructed[:compare_len]
     reconstruction_rmse = float(np.sqrt(np.mean(np.square(err)))) if compare_len else 0.0
@@ -171,6 +184,7 @@ def analyze_audio(signal: np.ndarray, fs_original: int, fs_processing: int,
         "t_sampled": t_sampled,
         "adc": adc,
         "reconstructed": reconstructed,
+        "reconstructed_smooth": reconstructed_smooth,
         "reconstruction_rmse": reconstruction_rmse,
         "reconstruction_mae": reconstruction_mae,
         "frequencies": f,
