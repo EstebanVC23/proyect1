@@ -829,9 +829,9 @@ class AudioDSPApp:
         """Carga automáticamente las canciones del proyecto si existen en data/audio."""
         default_files = [
             (1, "data/audio/capricho_24.wav", "Capricho No. 24", "Niccolò Paganini", "1802-1817", "Violín solo"),
-            (2, "data/audio/Alan-Walker-Faded.wav", "Fade", "Alan Walker", "2014", "NCS / Electrónica"),
+            (2, "data/audio/Alan-Walker-Faded.wav", "Fade", "Alan Walker", "2015", "NCS / Electrónica"),
             (3, "data/audio/gotas_de_lluvia.wav", "Gotas de Lluvia", "Grupo Niche", "1995", "Salsa"),
-            (4, "data/audio/repitela.wav", "Repítela", "Música Popular", "2018", "Música de cantina"),
+            (4, "data/audio/repitela.wav", "Repítela", "Jessi Uribe", "2015", "Música de cantina"),
             (5, "data/audio/diva_virtual.wav", "Diva Virtual", "Don Omar", "2009", "Reguetón"),
         ]
         loaded_any = False
