@@ -131,8 +131,6 @@ def analyze_audio(signal: np.ndarray, fs_original: int, fs_processing: int,
         raise ValueError("No hay muestras para analizar.")
     if fs_original <= 0 or fs_processing <= 0:
         raise ValueError("La frecuencia de muestreo debe ser positiva.")
-    if fs_processing > 192000:
-        raise ValueError("Para esta aplicación, la frecuencia de procesamiento máxima es 192000 Hz.")
     if max_seconds <= 0:
         raise ValueError("La duración máxima de análisis debe ser positiva.")
 

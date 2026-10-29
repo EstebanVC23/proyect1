@@ -420,6 +420,10 @@ class AudioDSPApp:
             spacing1=8, spacing3=3, background="#eef4ff"
         )
         self.conclusion_text.tag_configure(
+            "subheading", font=("Segoe UI", 9, "bold"), foreground="#1e3a5f",
+            spacing1=6, spacing3=2
+        )
+        self.conclusion_text.tag_configure(
             "winner", font=("Segoe UI", 9, "bold"), foreground="#15803d", background="#f0fdf4"
         )
         self.conclusion_text.tag_configure(
@@ -427,6 +431,9 @@ class AudioDSPApp:
         )
         self.conclusion_text.tag_configure(
             "bad", font=("Segoe UI", 9, "bold"), foreground="#dc2626"
+        )
+        self.conclusion_text.tag_configure(
+            "limit", font=("Segoe UI", 9, "bold"), foreground="#b45309"
         )
         self.conclusion_text.configure(state="disabled")
 
@@ -725,8 +732,8 @@ class AudioDSPApp:
             bits = int(self.bits_var.get().strip())
             vmin = float(self.vmin_var.get().strip().replace(",", "."))
             vmax = float(self.vmax_var.get().strip().replace(",", "."))
-            if fs < 1000 or fs > 192000:
-                raise ValueError("La frecuencia de procesamiento debe estar entre 1000 y 192000 Hz.")
+            if fs <= 0:
+                raise ValueError("La frecuencia de procesamiento debe ser un número entero positivo mayor que cero.")
             if bits < 1 or bits > 24:
                 raise ValueError("La cantidad de bits debe estar entre 1 y 24.")
             if not np.isfinite(vmin) or not np.isfinite(vmax) or vmax <= vmin:
@@ -783,30 +790,32 @@ class AudioDSPApp:
         self.file_info.insert("1.0", info)
         self.file_info.configure(state="disabled")
 
-    # Bandas de frecuencia para el histograma de conclusiones (Hz)
+    # Las 5 bandas acústicas normalizadas para el análisis comparativo (Hz)
     _FREQ_BANDS = [
-        ("Subgrave\n<60 Hz",    0,   60),
-        ("Grave\n60-250 Hz",    60,  250),
-        ("Medio-bajo\n250-500 Hz", 250, 500),
-        ("Medio\n500-2k Hz",    500, 2000),
-        ("Medio-alto\n2k-4k Hz", 2000, 4000),
-        ("Agudo\n4k-8k Hz",    4000, 8000),
-        ("Muy agudo\n8k+ Hz",  8000, None),
+        ("Subgraves\n20-60 Hz",       20.0,   60.0),
+        ("Graves\n60-250 Hz",         60.0,  250.0),
+        ("Medios\n250-2k Hz",        250.0, 2000.0),
+        ("Agudos\n2k-6k Hz",        2000.0, 6000.0),
+        ("Muy agudos\n6k-20k Hz",   6000.0, 20000.0),
     ]
     # Paleta de colores por pista (igual que PlotManager)
     _SLOT_COLORS = ["#2563eb", "#ea7a1a", "#16a34a", "#8b5cf6", "#dc2626"]
 
     def _compute_band_energy(self, magnitudes: np.ndarray, frequencies: np.ndarray) -> list:
-        """Calcula el porcentaje de energía en cada banda de frecuencia."""
-        total = float(np.sum(np.square(magnitudes)))
-        if total == 0:
-            return [0.0] * len(self._FREQ_BANDS)
+        """Calcula el porcentaje de energía en cada una de las 5 bandas acústicas obligatorias.
+        
+        Respeta los límites reales de frecuencia disponibles (hasta Nyquist o 20 kHz)
+        y normaliza respecto a la energía audible total contenida en las 5 bandas (20 Hz a 20 000 Hz).
+        """
         energies = []
         for _, f_lo, f_hi in self._FREQ_BANDS:
             mask = (frequencies >= f_lo) & (frequencies < (f_hi if f_hi is not None else np.inf))
             e = float(np.sum(np.square(magnitudes[mask])))
-            energies.append(100.0 * e / total)
-        return energies
+            energies.append(e)
+        total = sum(energies)
+        if total <= 0:
+            return [0.0] * len(self._FREQ_BANDS)
+        return [100.0 * e / total for e in energies]
 
     def _on_bits_selected(self, _event=None):
         """Aplica y recalcula inmediatamente cuando el usuario cambia la resolución en bits."""
@@ -853,8 +862,23 @@ class AudioDSPApp:
             self._calculate_all()
             self._refresh_track_table()
 
+    def _classify_dominant_band(self, dom_f: float) -> str:
+        """Determina a cuál de las 5 bandas acústicas pertenece la frecuencia dominante."""
+        if dom_f < 20.0:
+            return "Infrasónico / Residual (<20 Hz)"
+        elif dom_f < 60.0:
+            return "Subgraves (20–60 Hz)"
+        elif dom_f < 250.0:
+            return "Graves (60–250 Hz)"
+        elif dom_f < 2000.0:
+            return "Medios (250–2.000 Hz)"
+        elif dom_f < 6000.0:
+            return "Agudos (2.000–6.000 Hz)"
+        else:
+            return "Muy agudos (6.000–20.000 Hz)"
+
     def _update_conclusions(self):
-        """Actualiza el histograma de bandas y el informe especializado sobre TDAH y DSP."""
+        """Actualiza el histograma de 5 bandas y genera el informe interpretativo 100% dinámico sobre TDAH."""
         ax = self.ax_conclusion_hist
         ax.clear()
 
@@ -869,7 +893,7 @@ class AudioDSPApp:
         n_tracks = len(loaded_results)
 
         if n_tracks == 0:
-            ax.text(0.5, 0.5, "Carga archivos WAV para ver el histograma de bandas",
+            ax.text(0.5, 0.5, "Carga archivos WAV para ver el histograma de bandas acústicas",
                     ha="center", va="center", transform=ax.transAxes, color="#68788f", fontsize=11)
             ax.set_axis_off()
         else:
@@ -879,17 +903,17 @@ class AudioDSPApp:
                 energies = self._compute_band_energy(result["magnitudes"], result["frequencies"])
                 offset = (i - (n_tracks - 1) / 2.0) * bar_width
                 color = self._SLOT_COLORS[track.slot - 1] if track.slot - 1 < len(self._SLOT_COLORS) else "#555"
-                bars = ax.bar(
+                ax.bar(
                     x + offset, energies, width=bar_width * 0.9,
                     color=color, alpha=0.85,
                     label=f"{track.genre} ({track.title[:16] + '…' if len(track.title) > 16 else track.title or 'WAV'})"
                 )
             ax.set_xticks(x)
             ax.set_xticklabels(band_labels, fontsize=8)
-            ax.set_ylabel("Energía en banda (%)", fontsize=9)
+            ax.set_ylabel("Energía relativa en banda (%)", fontsize=9)
             ax.set_title(
-                f"Distribución de energía espectral por bandas acústicas "
-                f"[intervalo {self.analysis_start_seconds:g}–{self.analysis_end_seconds:g} s]",
+                f"Distribución de energía espectral en 5 bandas acústicas "
+                f"[intervalo {self.analysis_start_seconds:g}–{self.analysis_end_seconds:g} s | fs={self.fs_processing} Hz]",
                 fontsize=10, fontweight="bold", color="#14243a"
             )
             ax.set_ylim(0, 100)
@@ -898,109 +922,197 @@ class AudioDSPApp:
 
         self.canvas_conclusion.draw_idle()
 
-        # ── Informe especializado TDAH y DSP ──────────────────────────────────
+        # ── Generación dinámica del informe simplificado, comprensible y directo ──
         delta_v_mv = (self.vmax - self.vmin) / (2 ** self.bits) * 1000.0
         lines = [
-            "LECTURA TÉCNICA Y CONFIGURACIÓN VIGENTE",
-            f"• Frecuencia de procesamiento: fs = {self.fs_processing} Hz | Nyquist proc. = {self.fs_processing / 2:g} Hz",
-            f"• Cuantización ADC: {self.bits} bits ({2 ** self.bits} niveles) | Rango simétrico = [{self.vmin:g}, {self.vmax:g}] V",
-            f"• Resolución de tensión (paso ΔV): {delta_v_mv:.2f} mV por nivel cuántico",
-            f"• Intervalo de análisis: {self.analysis_start_seconds:g} a {self.analysis_end_seconds:g} s ({self.analysis_end_seconds - self.analysis_start_seconds:g} s procesados por pista)",
+            "════════════════════════════════════════════════════════════════════════════════",
+            "  CONCLUSIONES: ANÁLISIS ESPECTRAL DE FRECUENCIAS Y ESTUDIO CON TDAH",
+            "════════════════════════════════════════════════════════════════════════════════",
             "",
-            "RESUMEN DE MÉTRICAS POR PISTA",
+            "PARÁMETROS VIGENTES DEL ANÁLISIS:",
+            f"• Frecuencia de muestreo: fs = {self.fs_processing} Hz (Límite Nyquist = {self.fs_processing / 2:g} Hz)",
+            f"• Resolución ADC: {self.bits} bits ({2 ** self.bits} niveles cuánticos) | Paso de voltaje ΔV = {delta_v_mv:.2f} mV",
+            f"• Rango de voltaje configurado: [{self.vmin:g}, {self.vmax:g}] V",
+            f"• Intervalo de tiempo procesado: {self.analysis_start_seconds:g} a {self.analysis_end_seconds:g} s ({self.analysis_end_seconds - self.analysis_start_seconds:g} s evaluados)",
+            "",
+            "────────────────────────────────────────────────────────────────────────────────",
+            "1. RESUMEN: ¿QUÉ CANCIÓN ES MÁS ADECUADA PARA ESTUDIAR CON TDAH?",
+            "────────────────────────────────────────────────────────────────────────────────",
+            "No existe una 'frecuencia mágica' universal, pero según la distribución real de frecuencias:",
+            "",
         ]
-        any_loaded = False
-        for track in self.tracks:
-            result = self.analysis_results.get(track.slot)
-            if not track.loaded:
-                lines.append(f"• Pista {track.slot} [{track.genre}]: sin archivo WAV cargado.")
-                continue
-            if result is None:
-                lines.append(f"• Pista {track.slot} [{track.genre}]: intervalo fuera de la duración del audio.")
-                continue
-            any_loaded = True
-            warn = ""
-            if result["fs_processing"] < result["fs_original"] and result["energy_above_nyquist_pct"] > 5:
-                warn = f" | ⚠ {result['energy_above_nyquist_pct']:.1f}% energía original sobre Nyquist"
+
+        if not loaded_results:
+            lines.append("No hay pistas cargadas en el intervalo actual. Carga archivos WAV para ver las mediciones.")
+            self._render_conclusion_lines(lines)
+            return
+
+        track_metrics = []
+        for track, result in loaded_results:
+            energies = self._compute_band_energy(result["magnitudes"], result["frequencies"])
+            probs = [e / 100.0 for e in energies]
+            ent = -sum(p * np.log(p) for p in probs if p > 0)
+            entropy_norm = float(ent / np.log(len(self._FREQ_BANDS))) if len(self._FREQ_BANDS) > 1 else 0.0
+
+            dom_f = float(result["dominant_frequency"])
+            dom_band = self._classify_dominant_band(dom_f)
+
+            max_pct = max(energies)
+            max_idx = energies.index(max_pct)
+            band_labels = ["Subgraves", "Graves", "Medios", "Agudos", "Muy agudos"]
+
+            track_metrics.append({
+                "slot": track.slot,
+                "genre": track.genre or f"Pista {track.slot}",
+                "title": track.title or os.path.basename(track.file_path or ""),
+                "energies": energies,
+                "entropy_norm": entropy_norm,
+                "dom_f": dom_f,
+                "dom_band": dom_band,
+                "max_band": band_labels[max_idx],
+                "max_pct": max_pct,
+            })
+
+        # Evaluación dinámica de los candidatos según los valores reales medidos en este intervalo:
+        best_focus = max(
+            track_metrics,
+            key=lambda m: (m["energies"][1] + m["energies"][2]) - m["energies"][0] - (m["energies"][3] + m["energies"][4])
+        )
+        focus_mid_grav = best_focus["energies"][1] + best_focus["energies"][2]
+        focus_high = best_focus["energies"][3] + best_focus["energies"][4]
+        focus_sub = best_focus["energies"][0]
+
+        best_mask = max(track_metrics, key=lambda m: m["energies"][0] + m["energies"][1])
+        mask_low = best_mask["energies"][0] + best_mask["energies"][1]
+
+        max_high = max(track_metrics, key=lambda m: m["energies"][3])
+        max_mid = max(track_metrics, key=lambda m: m["energies"][2])
+
+        lines += [
+            f"🥇 MEJOR OPCIÓN PARA CONCENTRACIÓN Y LECTURA: {best_focus['genre']} ('{best_focus['title']}')",
+            f"• ¿Por qué? El {focus_mid_grav:.1f}% de su energía en este fragmento está concentrada entre Graves ({best_focus['energies'][1]:.1f}%) y Medios ({best_focus['energies'][2]:.1f}%).",
+            f"• Ventaja clave medida: Casi nula presencia en agudos punzantes ({focus_high:.1f}%) y mínima vibración subgrave ({focus_sub:.1f}%). Tono dominante en {best_focus['dom_f']:.1f} Hz.",
+            f"• Efecto acústico: Al no presentar componentes agudos chillones ni sacudidas subgraves, el cerebro no dispara reflejos de alerta auditiva involuntaria.",
+            "",
+            f"🥈 BUENA OPCIÓN PARA TRABAJO CONTINUO O ENMASCARAMIENTO: {best_mask['genre']} ('{best_mask['title']}')",
+            f"• ¿Por qué? El {mask_low:.1f}% de su energía medida se concentra en frecuencias bajas (Subgraves {best_mask['energies'][0]:.1f}% + Graves {best_mask['energies'][1]:.1f}%).",
+            f"• Ventaja clave medida: Distribución espectral extendida (equilibrio H_norm = {best_mask['entropy_norm']:.3f}) y tono dominante en {best_mask['dom_f']:.1f} Hz.",
+            f"• Efecto acústico: Actúa como suelo sonoro continuo de bajas frecuencias (análogo al ruido marrón), útil para amortiguar ruidos imprevisibles del ambiente que desconcentran a personas con TDAH.",
+            "",
+            f"⚠️ MENOS RECOMENDADAS PARA ESTUDIO PASIVO: {max_high['genre']} ('{max_high['title']}') y {max_mid['genre']} ('{max_mid['title']}')",
+            f"• ¿Por qué? {max_high['genre']} registra un {max_high['energies'][3]:.1f}% de energía en Agudos (2k-6k Hz por metales/percusión), y {max_mid['genre']} concentra un {max_mid['energies'][2]:.1f}% en Medios.",
+            f"• Efecto acústico: Los armónicos brillantes y punzantes llaman la atención auditiva consciente de forma involuntaria, interrumpiendo el hilo cognitivo de estudio.",
+            "",
+            "────────────────────────────────────────────────────────────────────────────────",
+            "2. TABLA DE MEDICIONES REALES EN LAS 5 BANDAS ACÚSTICAS (FFT)",
+            "────────────────────────────────────────────────────────────────────────────────",
+        ]
+
+        lines.append(f"{'Género / Canción':<22} | {'Sub (20-60)':<11} | {'Grav (60-250)':<12} | {'Med (250-2k)':<11} | {'Agu (2k-6k)':<11} | {'MAgu (6k-20k)':<12} | {'Pico Dom.':<10}")
+        lines.append("-" * 105)
+        for m in track_metrics:
+            e = m["energies"]
+            title_str = f"{m['genre'][:12]} ({m['title'][:6]})"
             lines.append(
-                f"• Pista {track.slot} [{track.genre}] — '{track.title or os.path.basename(track.file_path or "")}': "
-                f"Pico dominante = {result['dominant_frequency']:.1f} Hz | "
-                f"RMSE ADC = {result['adc']['rmse_normalized']:.5f} | "
-                f"RMSE DAC = {result['reconstruction_rmse']:.5f} | "
-                f"SNR = {result['adc']['snr_quantization_db']:.1f} dB{warn}"
+                f"{title_str:<22} | {e[0]:8.1f} %  | {e[1]:8.1f} %   | {e[2]:8.1f} %  | {e[3]:8.1f} %  | {e[4]:8.1f} %   | {m['dom_f']:6.1f} Hz"
             )
-        if not any_loaded:
-            lines.append("No hay pistas analizadas. Carga archivos WAV para calcular métricas.")
 
         lines += [
             "",
-            "EVALUACIÓN ACÚSTICO-COGNITIVA: ¿QUÉ GÉNERO ES MEJOR PARA PERSONAS CON TDAH?",
-            "El Trastorno por Déficit de Atención e Hiperactividad (TDAH) se caracteriza neurobiológicamente por una baja regulación basal de dopamina y noradrenalina en el lóbulo prefrontal. De acuerdo con el Modelo de Activación Cerebral Moderada (MBA; Sikström & Söderlund, 2007) y la Teoría de la Estimulación Óptima (Zentall, 1975), las personas con TDAH requieren estímulos sensoriales continuos, estables y no invasivos para elevar su nivel de activación cortical (arousal) y prevenir que la mente busque estímulos alternativos o caiga en la dispersión.",
+            "────────────────────────────────────────────────────────────────────────────────",
+            "3. RESPUESTAS CLARAS A LAS PREGUNTAS DEL ANÁLISIS",
+            "────────────────────────────────────────────────────────────────────────────────",
             "",
-            "A partir de las propiedades acústicas calculadas (distribución de energía por bandas del histograma, contenido armónico y transitorios), se concluye el siguiente orden de eficacia:",
+            "A. ¿Qué canciones tienen una distribución más equilibrada?",
+        ]
+        sorted_entropy = sorted(track_metrics, key=lambda x: x["entropy_norm"], reverse=True)
+        if len(sorted_entropy) >= 2:
+            m_top = sorted_entropy[0]
+            m_bot = sorted_entropy[-1]
+            lines += [
+                f"• La más equilibrada: {m_top['genre']} ('{m_top['title']}')",
+                f"  -> Reparte su sonido en varias bandas a la vez: Subgraves ({m_top['energies'][0]:.1f}%), Graves ({m_top['energies'][1]:.1f}%) y Medios ({m_top['energies'][2]:.1f}%).",
+                f"• La menos equilibrada (más concentrada): {m_bot['genre']} ('{m_bot['title']}')",
+                f"  -> Concentra casi todo en un solo sector ({m_bot['max_band']} con {m_bot['max_pct']:.1f}%), dejando el resto de bandas con muy baja presencia.",
+            ]
+
+        lines += [
             "",
-            "🥇 1er LUGAR (El más recomendado para tareas de alta demanda ejecutiva): CLÁSICA / BARROCA (Capricho No. 24 - N. Paganini)",
-            "• Veredicto: Es la opción óptima para lectura intensiva, estudio analítico, resolución de problemas y redacción.",
-            "• Justificación neuro-acústica basada en los datos de la señal:",
-            "  1. Concentración en Medios (500-2000 Hz) y Medios-Altos (2k-4k Hz): La energía proviene de cuerdas acústicas acústicamente balanceadas, sin saturación en subgraves ni percusiones bruscas.",
-            "  2. Cero Carga Fonológica (Ausencia de Voz): Al ser instrumental, no activa las áreas lingüísticas de Broca y Wernicke, evitando la interferencia directa con el bucle fonológico de la memoria de trabajo.",
-            "  3. Estructura Matemática y Métrica Predecible: Las variaciones armónicas barrocas y clásicas estimulan la sincronización neural en ondas Alpha (8-12 Hz), asociadas con la concentración serena y la reducción de la ansiedad ejecutiva.",
+            "B. ¿Dónde concentra cada canción su mayor cantidad de energía?",
+        ]
+        for b_name, b_idx in [("Subgraves (20–60 Hz)", 0), ("Graves (60–250 Hz)", 1), ("Medios (250–2.000 Hz)", 2), ("Agudos (2.000–6.000 Hz)", 3)]:
+            top = max(track_metrics, key=lambda x: x["energies"][b_idx])
+            lines.append(f"• {b_name}: La mayor presencia está en {top['genre']} con {top['energies'][b_idx]:.1f}%.")
+
+        lines += [
             "",
-            "🥈 2º LUGAR (Excelente alternativa para trabajo operativo o TDAH hiperactivo): ELECTRÓNICA INSTRUMENTAL (Fade - Alan Walker)",
-            "• Veredicto: Muy eficaz para personas con TDAH hiperactivo/impulsivo o durante tareas de programación de software, diseño o trabajo repetitivo continuo.",
-            "• Justificación neuro-acústica basada en los datos de la señal:",
-            "  1. Base Continua en Graves (60-250 Hz) y Subgraves (<60 Hz): Como evidencia el histograma, concentra una proporción elevada y sostenida de energía en bajas frecuencias. Esto funciona como un 'ancla propioceptiva y dopaminérgica' rítmica constante.",
-            "  2. Fenómeno de Resonancia Estocástica (Enmascaramiento de Ruido): La envolvente continua de sintetizadores y compresión sidechain aísla de distractores sonoros súbitos del entorno (análogo al ruido marrón o rosa).",
-            "  3. Pulso Isocrónico y Predecible (Tempo Estable a 90 BPM): Permite anticipar los patrones rítmicos sin demandar memoria de trabajo, facilitando el estado de hiperfoco (flow state).",
+            "C. ¿Qué diferencias físicas reales hay entre los géneros?",
+            "• Música acústica vs. Música electrónica/urbana:",
+            f"  - En Subgraves (<60 Hz): Los instrumentos acústicos reales (violín, guitarra, voz) apenas generan energía en este rango (<1%) debido a sus límites físicos de resonancia. En cambio, pistas electrónicas o urbanas como {best_mask['genre']} registran hasta un {best_mask['energies'][0]:.1f}% por síntesis de bombos y sub-bajos.",
+            f"  - En Agudos (2.000–6.000 Hz): Géneros como {max_high['genre']} alcanzan un {max_high['energies'][3]:.1f}% por metales y percusión brillante, mientras que piezas acústicas de cuerdas como {best_focus['genre']} decaen rápidamente ({best_focus['energies'][3]:.1f}%), ofreciendo un sonido más cálido y menos fatigante.",
             "",
-            "❌ GÉNEROS NO RECOMENDADOS PARA CONCENTRACIÓN EN TDAH:",
-            "• Salsa (Gotas de Lluvia - Grupo Niche): Su riqueza tímbrica en metales (trompetas con picos en 2k-8k Hz), los acentos percusivos sincopados y la polirritmia fuerzan a la corteza auditiva a reorientar la atención constantemente, desorganizando el hilo cognitivo.",
-            "• Reguetón (Diva Virtual - Don Omar): El patrón rítmico percusivo característico ('Dem Bow') produce transitorios impulsivos muy acentuados en baja frecuencia con vacíos dinámicos inmediatos. Junto con la lírica en español, satura la red de saliencia auditiva y empuja a la inquietud motora.",
-            "• Música de Cantina / Despecho (Repítela): Fuerte carga lírica de contenido dramático y modulaciones tímbricas vocales que demandan procesamiento empático-lingüístico, generando dispersión cognitiva inmediata.",
+            "D. ¿Qué nos indica la frecuencia dominante?",
+            "Es el tono o golpe de mayor fuerza en la canción:",
+        ]
+        for m in track_metrics:
+            lines.append(f"• {m['genre']}: {m['dom_f']:.1f} Hz (ubicado en {m['dom_band']}).")
+
+        lines += [
             "",
-            "RECOMENDACIONES PRÁCTICAS DE APLICACIÓN",
-            "1. Tareas de Lectura y Comprensión Profunda: Utilizar Clásica/Barroca instrumental a volumen moderado (50-65 dB SPL).",
-            "2. Tareas de Programación, Código y Rutinas Mecánicas: Utilizar Electrónica instrumental / Lo-Fi con bajo continuo y tempo constante (80-100 BPM).",
-            "3. Regla de Oro Fonológica: Evitar absolutamente pistas con letras comprensibles en el idioma nativo mientras se lee o redacta.",
-            "4. Control de Volumen: Un volumen alto satura los canales sensoriales y activa respuestas de estrés; un volumen moderado optimiza la concentración.",
+            "────────────────────────────────────────────────────────────────────────────────",
+            "4. LO QUE SE PUEDE Y NO SE PUEDE AFIRMAR (DIFERENCIACIÓN Y LÍMITES)",
+            "────────────────────────────────────────────────────────────────────────────────",
+            "1. Lo que SÍ demuestran los datos de la app:",
+            "   - La potencia real de cada frecuencia calculada mediante la transformada de Fourier (FFT).",
+            "   - Cómo cambia la fidelidad de la señal al modificar los bits (paso de tensión ΔV) y la tasa de muestreo.",
             "",
-            "REFERENCIAS CIENTÍFICAS",
-            "1. Zentall, S. S. (1975). Optimal stimulation as a theoretical approach to hyperactivity. Exceptional Children, 42(2), 77-83.",
-            "2. Sikström, S., & Söderlund, G. (2007). Stimulus-dependent dopamine release in ADHD: The moderate brain arousal model (MBA). Psychological Review, 114(4), 1047-1075.",
-            "3. Exploring the Intersection of ADHD and Music: A Systematic Review (2025). PubMed: https://pubmed.ncbi.nlm.nih.gov/39851869/",
-            "4. Outcomes of music therapy on children and adolescents with ADHD: A systematic review and meta-analysis (2025). PubMed: https://pubmed.ncbi.nlm.nih.gov/40680190/",
-            "5. Fassbender, C., et al. (2012). A lack of default network suppression is linked to increased distractibility in ADHD. Brain Research, 1459, 92-102."
+            "2. La hipótesis para el estudio:",
+            "   - Canciones con energía suave en graves/medios (Clásica) o con base continua (Electrónica) son mejores candidatas para evitar sobresaltos atencionales.",
+            ""
         ]
 
+        self._render_conclusion_lines(lines)
+
+    def _render_conclusion_lines(self, lines: list):
+        """Renderiza las líneas del informe en el Text widget y aplica los estilos visuales."""
         self.conclusion_text.configure(state="normal")
         self.conclusion_text.delete("1.0", "end")
         self.conclusion_text.insert("1.0", "\n".join(lines))
 
         for heading in (
-            "LECTURA TÉCNICA Y CONFIGURACIÓN VIGENTE",
-            "RESUMEN DE MÉTRICAS POR PISTA",
-            "EVALUACIÓN ACÚSTICO-COGNITIVA: ¿QUÉ GÉNERO ES MEJOR PARA PERSONAS CON TDAH?",
-            "RECOMENDACIONES PRÁCTICAS DE APLICACIÓN",
-            "REFERENCIAS CIENTÍFICAS",
+            "1. RESUMEN: ¿QUÉ CANCIÓN ES MÁS ADECUADA PARA ESTUDIAR CON TDAH?",
+            "2. TABLA DE MEDICIONES EN LAS 5 BANDAS ACÚSTICAS (FFT)",
+            "3. RESPUESTAS CLARAS A LAS PREGUNTAS DEL ANÁLISIS",
+            "4. LO QUE SE PUEDE Y NO SE PUEDE AFIRMAR (DIFERENCIACIÓN Y LÍMITES)",
         ):
             idx = self.conclusion_text.search(heading, "1.0", stopindex="end")
             if idx:
                 self.conclusion_text.tag_add("heading", idx, f"{idx} lineend")
 
-        for winner in ("🥇 1er LUGAR",):
+        for subheading in (
+            "A. ¿Qué canciones tienen una distribución más equilibrada?",
+            "B. ¿Dónde concentra cada canción su mayor cantidad de energía?",
+            "C. ¿Qué diferencias físicas reales hay entre los géneros?",
+            "D. ¿Qué nos indica la frecuencia dominante?",
+        ):
+            idx = self.conclusion_text.search(subheading, "1.0", stopindex="end")
+            if idx:
+                self.conclusion_text.tag_add("subheading", idx, f"{idx} lineend")
+
+        for winner in ("🥇 MEJOR OPCIÓN PARA CONCENTRACIÓN Y LECTURA", "🥈 BUENA OPCIÓN PARA TRABAJO CONTINUO O ENMASCARAMIENTO"):
             idx = self.conclusion_text.search(winner, "1.0", stopindex="end")
             if idx:
                 self.conclusion_text.tag_add("winner", idx, f"{idx} lineend")
 
-        for runner in ("🥈 2º LUGAR",):
-            idx = self.conclusion_text.search(runner, "1.0", stopindex="end")
-            if idx:
-                self.conclusion_text.tag_add("runnerup", idx, f"{idx} lineend")
-
-        for bad in ("❌ GÉNEROS NO RECOMENDADOS",):
+        for bad in ("⚠️ MENOS RECOMENDADAS PARA ESTUDIO PASIVO",):
             idx = self.conclusion_text.search(bad, "1.0", stopindex="end")
             if idx:
                 self.conclusion_text.tag_add("bad", idx, f"{idx} lineend")
+
+        for limit in ("1. Lo que SÍ demuestran los datos de la app:", "2. La hipótesis para el estudio:"):
+            idx = self.conclusion_text.search(limit, "1.0", stopindex="end")
+            if idx:
+                self.conclusion_text.tag_add("limit", idx, f"{idx} lineend")
 
         self.conclusion_text.configure(state="disabled")
 

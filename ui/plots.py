@@ -288,12 +288,21 @@ class PlotManager:
 
         ax.step(ts, quant_v, where="post", linewidth=0.85, color=C_GREEN, label=f"ADC ({bits} bits, {levels} niv.)")
         snr_str = f"{snr_db:.1f} dB" if snr_db < 200 else "∞"
-        ax.set_title(f"ADC · {bits} bits ({levels} niveles)")
+        ax.set_title(f"ADC · {bits} bits ({levels} niveles) · ΔV = {delta_v * 1000:.1f} mV · SNR = {snr_str}")
         ax.set_xlabel("Tiempo de la canción (s)")
         ax.set_ylabel("Voltaje cuantizado (V)")
-        ax.set_ylim(vmin_adc - 0.4, vmax_adc + 0.4)
-        ax.axhline(vmax_adc, color="#94a3b8", linestyle=":", linewidth=0.7, alpha=0.6)
-        ax.axhline(vmin_adc, color="#94a3b8", linestyle=":", linewidth=0.7, alpha=0.6)
+        if len(quant_v) > 0:
+            ymin = float(np.min(quant_v))
+            ymax = float(np.max(quant_v))
+            if np.isclose(ymin, ymax):
+                pad = max(0.2, abs(ymin) * 0.1) if not np.isclose(ymin, 0.0) else 0.5
+            else:
+                pad = max(0.05, (ymax - ymin) * 0.08)
+            ax.set_ylim(ymin - pad, ymax + pad)
+            if ymin - pad <= vmax_adc <= ymax + pad:
+                ax.axhline(vmax_adc, color="#94a3b8", linestyle=":", linewidth=0.7, alpha=0.6)
+            if ymin - pad <= vmin_adc <= ymax + pad:
+                ax.axhline(vmin_adc, color="#94a3b8", linestyle=":", linewidth=0.7, alpha=0.6)
         ax.axhline(0.0, color="#cbd5e1", linestyle="-", linewidth=0.5, alpha=0.4)
         style_axes(ax)
         ax.legend(fontsize=7, loc="upper right")
