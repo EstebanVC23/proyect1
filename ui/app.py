@@ -201,7 +201,7 @@ class AudioDSPApp:
 
         badge = tk.Label(inner, text=" ∿ ", bg=PRIMARY, fg="#ffffff", font=("Segoe UI", 16, "bold"))
         badge.pack(side="left", padx=(0, 12))
-        tk.Label(inner, text="Señales DPS", bg=NAVY, fg="#ffffff", font=("Segoe UI", 20, "bold")).pack(side="left")
+        tk.Label(inner, text="DPS", bg=NAVY, fg="#ffffff", font=("Segoe UI", 20, "bold")).pack(side="left")
         tk.Label(
             inner, text="Análisis de audio · muestreo · ADC / DAC · FFT",
             bg=NAVY, fg="#9fb3cf", font=("Segoe UI", 10)
